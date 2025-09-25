@@ -109,13 +109,8 @@ int addConstant(Chunk* chunk, Value value)
 
 int getLine(Chunk* chunk, int offset)
 {
-    int last = chunk->opLines.count - 1;
-    int max = chunk->opLines.offsets[last];
     int min = chunk->opLines.offsets[0];
 
-    // offset cannot be larger than max.
-    if (offset == max)
-        return chunk->opLines.lines[last];
     // min is the largest offset for the first line.
     if (offset <= min)
         return chunk->opLines.lines[0];
