@@ -13,10 +13,17 @@ typedef enum {
 } OpCode;
 
 typedef struct {
+    int* lines;
+    int* offsets;
+    int count;
+    int capacity;
+} LineArray;
+
+typedef struct {
     int count;
     int capacity;
     uint8_t* code;
-    int* lines;
+    LineArray opLines;
     ValueArray constants;
 } Chunk;
 
@@ -32,5 +39,8 @@ void writeChunk(Chunk* chunk, uint8_t byte, int line);
 void writeConstant(Chunk* chunk, Value value, int line);
 // Add constant to chunk pool.
 int addConstant(Chunk* chunk, Value value);
+// Get line of instruction by offset.
+int getLine(Chunk* chunk, int offset);
+
 
 #endif
