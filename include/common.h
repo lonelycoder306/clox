@@ -5,4 +5,6 @@
 #include <stddef.h> // For NULL and size_t.
 #include <stdint.h> // For explicit-sized integer types.
 
+#define DEBUG_TRACE_EXECUTION
+
 #endif

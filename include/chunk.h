@@ -9,7 +9,12 @@
 typedef enum {
     OP_CONSTANT, // Opcode | position in constant pool.
     OP_CONSTANT_LONG, // Opcode | position in constant pool.
-    OP_RETURN // Opcode
+    OP_ADD, // Opcode.
+    OP_SUBTRACT, // Opcode.
+    OP_MULTIPLY, // Opcode.
+    OP_DIVIDE, // Opcode.
+    OP_NEGATE, // Opcode.
+    OP_RETURN // Opcode.
 } OpCode;
 
 typedef struct {
