@@ -1,9 +1,12 @@
 #include "../include/chunk.h"
 #include "../include/common.h"
 #include "../include/debug.h"
+// #include "../include/heap.h"
 
 int main(int argc, const char* argv[])
 {
+    // initHeap(&heap);
+    // allocateHeap(&heap, 1000);
     Chunk chunk;
     initChunk(&chunk);
 
@@ -19,6 +22,8 @@ int main(int argc, const char* argv[])
 
     disassembleChunk(&chunk, "test chunk");
     freeChunk(&chunk);
+
+    //freeHeap(&heap);
 
     return 0;
 }

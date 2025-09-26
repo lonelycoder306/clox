@@ -1,4 +1,5 @@
 #include "../include/memory.h"
+// #include "../include/heap.h"
 #include <stdlib.h>
 
 void* reallocate(void* pointer, size_t oldSize, size_t newSize)
