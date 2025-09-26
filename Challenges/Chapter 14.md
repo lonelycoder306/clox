@@ -138,7 +138,7 @@ static int constLongInstruction(const char* name, Chunk* chunk, int offset)
 We simply reconstruct our index stored in big-endian format from our byte-code, and the remainder of the code is the same as in ```constantInstruction()```.\
 We also increment the offset by 4 to skip over the instruction and the three bytes used to encode the constant pool index.
 
-That's all we need. To test it, we simply need to fill up our chunk in our main() with enough constants to trigger the addition of this second instruction, so we use a loop.
+That's all we need. To test it, we simply need to fill up our chunk in main() with enough constants to trigger the use of this second instruction, so we use a loop.
 ``` c
 Chunk chunk;
 initChunk(&chunk);
@@ -154,6 +154,6 @@ This of course prints out a large number of lines. The important ones are these 
 0510 2550 OP_CONSTANT       255 '255'
 0512 2560 OP_CONSTANT_LONG  256 '256'
 ```
-This shows that our function worked. Once we fill up the constant pool with 255 constants (the most we can encode with a single-byte operand, as mentioned above), we switch to the ```OP_CONSTANT_LONG``` opcode (we never switch back for that particular chunk), and our byte-code operates as normal.
+This shows that our function worked. Once we fill up the constant pool with 256 constants (the most we can encode with a single-byte operand, as mentioned above), we switch to the ```OP_CONSTANT_LONG``` opcode (we never switch back for that particular chunk), and our byte-code operates as normal.
 
 ## 3
