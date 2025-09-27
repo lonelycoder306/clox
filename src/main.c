@@ -9,7 +9,7 @@
 int main(int argc, const char* argv[])
 {
     clock_t start, end;
-    [[maybe_unused]] double cpu_time_used;
+    double cpu_time_used;
     start = clock();
     initVM();
     
@@ -35,6 +35,7 @@ int main(int argc, const char* argv[])
 
     end = clock();
     cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
+    (void) cpu_time_used;
     #ifdef TIME_RUN
     printf("Time taken: %f seconds\n", cpu_time_used);
     #endif
