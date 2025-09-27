@@ -1,5 +1,6 @@
 #include "../include/vm.h"
 #include "../include/common.h"
+#include "../include/compiler.h"
 #include "../include/debug.h"
 #include "../include/memory.h"
 #include "../include/value.h"
@@ -126,9 +127,10 @@ static InterpretResult run()
     #undef BINARY_OP
 }
 
-InterpretResult interpret(Chunk* chunk)
+// Interpret pipeline driver.
+InterpretResult interpret(const char* source)
 {
-    vm.chunk = chunk;
-    vm.ip = vm.chunk->code;
-    return run();
+    // Call compiler.
+    compile(source);
+    return INTERPRET_OK;
 }
