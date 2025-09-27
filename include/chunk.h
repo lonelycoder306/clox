@@ -7,8 +7,12 @@
 // One-byte (uint8_t) operation code
 // for each instruction.
 typedef enum {
+    OP_ZERO, // Opcode.
+    OP_ONE, // Opcode.
     OP_CONSTANT, // Opcode | position in constant pool.
     OP_CONSTANT_LONG, // Opcode | position in constant pool.
+    OP_INCREMENT, // Opcode.
+    OP_DECREMENT, // Opcode.
     OP_ADD, // Opcode.
     OP_SUBTRACT, // Opcode.
     OP_MULTIPLY, // Opcode.

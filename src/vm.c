@@ -90,6 +90,8 @@ static InterpretResult run()
         uint8_t instruction;
         switch (instruction = READ_BYTE())
         {
+            case OP_ZERO:   push(0); break;
+            case OP_ONE:    push(1); break;
             case OP_CONSTANT:
             {
                 Value constant = READ_CONSTANT();
@@ -100,6 +102,16 @@ static InterpretResult run()
             {
                 Value constant = READ_CONSTLONG();
                 push(constant);
+                break;
+            }
+            case OP_INCREMENT:
+            {
+                vm.stack[vm.stackCount - 1]++;
+                break;
+            }
+            case OP_DECREMENT:
+            {
+                vm.stack[vm.stackCount - 1]--;
                 break;
             }
             case OP_ADD:        BINARY_OP(+); break;
