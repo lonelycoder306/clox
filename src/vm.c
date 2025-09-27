@@ -1,6 +1,7 @@
 #include "../include/vm.h"
 #include "../include/common.h"
 #include "../include/debug.h"
+#include "../include/memory.h"
 #include "../include/value.h"
 #include <stdio.h>
 
@@ -8,29 +9,41 @@ VM vm;
 
 static void resetStack()
 {
-    vm.stackTop = vm.stack;
+    vm.stackCount = 0; // Runs multiple times.
 }
 
 void initVM()
 {
+    // Both lines run once only.
+    vm.stack = NULL;
+    vm.stackCapacity = 0;
     resetStack();
 }
 
 void freeVM()
 {
-    
+    FREE_ARRAY(Value, vm.stack, vm.stackCapacity);
 }
 
 void push(Value value)
 {
-    *vm.stackTop = value;
-    vm.stackTop++;
+    /**(vm.stack.values + vm.stack.count) = value;
+    vm.stack.count++;*/
+    if (vm.stackCapacity < vm.stackCount + 1)
+    {
+        int oldCapacity = vm.stackCapacity;
+        vm.stackCapacity = GROW_CAPACITY(oldCapacity);
+        vm.stack = GROW_ARRAY(Value, vm.stack, oldCapacity, vm.stackCapacity);
+    }
+
+    vm.stack[vm.stackCount] = value;
+    vm.stackCount++;
 }
 
 Value pop()
 {
-    vm.stackTop--;
-    return *vm.stackTop;
+    vm.stackCount--;
+    return vm.stack[vm.stackCount];
 }
 
 static InterpretResult run()
@@ -60,7 +73,8 @@ static InterpretResult run()
             // Our stack is empty before the first instruction executes.
             // So this only starts printing after (at least) the first
             // instruction is disassembled.
-            for (Value* slot = vm.stack; slot < vm.stackTop; slot++)
+            Value* stackTop = vm.stack + vm.stackCount;
+            for (Value* slot = vm.stack; slot < stackTop; slot++)
             {
                 printf("[ ");
                 printValue(*slot);
@@ -91,7 +105,11 @@ static InterpretResult run()
             case OP_SUBTRACT:   BINARY_OP(-); break;
             case OP_MULTIPLY:   BINARY_OP(*); break;
             case OP_DIVIDE:     BINARY_OP(/); break;
-            case OP_NEGATE:     push(-pop()); break;
+            case OP_NEGATE:
+            {
+                vm.stack[vm.stackCount - 1] *= -1;
+                break;
+            }
             case OP_RETURN:
             {
                 printValue(pop());

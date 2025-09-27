@@ -9,8 +9,9 @@
 typedef struct {
     Chunk* chunk; // Chunk being executed in the VM.
     uint8_t* ip; // Pointer to the instruction about to be executed.
-    Value stack[STACK_MAX];
-    Value* stackTop; // The "top" (actually just past the end) of the stack.
+    Value* stack;
+    int stackCount;
+    int stackCapacity;
 } VM;
 
 typedef enum {
