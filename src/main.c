@@ -15,11 +15,8 @@ static void repl()
     while (true)
     {
         printf(">>> ");
-        if (!fgets(line, sizeof(line), stdin))
-        {
-            printf("\n");
+        if (*fgets(line, sizeof(line), stdin) == '\n')
             break;
-        }
 
         interpret(line);
     }
