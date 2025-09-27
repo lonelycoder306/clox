@@ -6,5 +6,6 @@
 #include <stdint.h> // For explicit-sized integer types.
 
 #define DEBUG_TRACE_EXECUTION
+#define TIME_RUN
 
 #endif

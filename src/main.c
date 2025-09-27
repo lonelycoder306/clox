@@ -2,10 +2,15 @@
 #include "../include/common.h"
 #include "../include/debug.h"
 #include "../include/vm.h"
+#include <stdio.h>
+#include <time.h>
 // #include "../include/heap.h"
 
 int main(int argc, const char* argv[])
 {
+    clock_t start, end;
+    [[maybe_unused]] double cpu_time_used;
+    start = clock();
     initVM();
     
     // initHeap(&heap);
@@ -27,6 +32,12 @@ int main(int argc, const char* argv[])
     interpret(&chunk);
     freeVM();
     freeChunk(&chunk);
+
+    end = clock();
+    cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
+    #ifdef TIME_RUN
+    printf("Time taken: %f seconds\n", cpu_time_used);
+    #endif
 
     //freeHeap(&heap);
 
