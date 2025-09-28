@@ -4,6 +4,7 @@
 #include "../include/debug.h"
 #include "../include/memory.h"
 #include "../include/value.h"
+#include <stdarg.h>
 #include <stdio.h>
 
 VM vm;
@@ -24,6 +25,20 @@ void initVM()
 void freeVM()
 {
     FREE_ARRAY(Value, vm.stack, vm.stackCapacity);
+}
+
+static void runtimeError(const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fputs("\n", stderr);
+
+    size_t offset = vm.ip - vm.chunk->code - 1;
+    int line = getLine(vm.chunk, offset);
+    fprintf(stderr, "[line %d] in script\n", line);
+    resetStack();
 }
 
 void push(Value value)
@@ -47,6 +62,16 @@ Value pop()
     return vm.stack[vm.stackCount];
 }
 
+static Value peek(int distance)
+{
+    return vm.stack[vm.stackCount - 1 - distance];
+}
+
+static bool isFalsey(Value value)
+{
+    return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+}
+
 static InterpretResult run()
 {
     #define READ_BYTE() (*vm.ip++) // Dereference then increment.
@@ -55,12 +80,17 @@ static InterpretResult run()
                           READ_BYTE())
     #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
     #define READ_CONSTLONG() (vm.chunk->constants.values[READ_TRIBYTE()])
-    #define BINARY_OP(op) \
+    #define BINARY_OP(valueType, op) \
             do \
             { \
-                double b = pop(); \
-                double a = pop(); \
-                push(a op b); \
+                if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) \
+                { \
+                    runtimeError("Operands must be numbers."); \
+                    return INTERPRET_RUNTIME_ERROR; \
+                } \
+                double b = AS_NUMBER(pop()); \
+                double a = AS_NUMBER(pop()); \
+                push(valueType(a op b)); \
             } while (false)
 
     #ifdef DEBUG_TRACE_EXECUTION
@@ -90,8 +120,22 @@ static InterpretResult run()
         uint8_t instruction;
         switch (instruction = READ_BYTE())
         {
-            case OP_ZERO:   push(0); break;
-            case OP_ONE:    push(1); break;
+            // Handles OP_ZERO and OP_COMPZERO.
+            case OP_ZERO:
+            {
+                if (*vm.ip == OP_COMPZER0)
+                {
+                    Value value = pop();
+                    (void) READ_BYTE(); // Skip the COMPZERO opcode.
+                    push(BOOL_VAL(valuesEqual(value, NUMBER_VAL(0))));
+                }
+                else
+                    push(NUMBER_VAL(0));
+                break;
+            }
+            case OP_ONE:        push(NUMBER_VAL(1)); break;
+            case OP_TWO:        push(NUMBER_VAL(2)); break;
+            case OP_MINUSONE:   push(NUMBER_VAL(-1)); break;
             case OP_CONSTANT:
             {
                 Value constant = READ_CONSTANT();
@@ -104,23 +148,45 @@ static InterpretResult run()
                 push(constant);
                 break;
             }
+            case OP_NIL:    push(NIL_VAL); break;
+            case OP_TRUE:   push(BOOL_VAL(true)); break;
+            case OP_FALSE:  push(BOOL_VAL(false)); break;
+            case OP_EQUAL:
+            {
+                Value b = pop();
+                Value a = pop();
+                push(BOOL_VAL(valuesEqual(a, b)));
+                break;
+            }
+            case OP_GREATER:    BINARY_OP(BOOL_VAL, >); break;
+            case OP_LESS:       BINARY_OP(BOOL_VAL, <); break;
             case OP_INCREMENT:
             {
-                vm.stack[vm.stackCount - 1]++;
+                vm.stack[vm.stackCount - 1].as.number++;
                 break;
             }
             case OP_DECREMENT:
             {
-                vm.stack[vm.stackCount - 1]--;
+                vm.stack[vm.stackCount - 1].as.number--;
                 break;
             }
-            case OP_ADD:        BINARY_OP(+); break;
-            case OP_SUBTRACT:   BINARY_OP(-); break;
-            case OP_MULTIPLY:   BINARY_OP(*); break;
-            case OP_DIVIDE:     BINARY_OP(/); break;
+            case OP_ADD:        BINARY_OP(NUMBER_VAL, +); break;
+            case OP_SUBTRACT:   BINARY_OP(NUMBER_VAL, -); break;
+            case OP_MULTIPLY:   BINARY_OP(NUMBER_VAL, *); break;
+            case OP_DIVIDE:     BINARY_OP(NUMBER_VAL, /); break;
+            case OP_NOT:
+            {
+                push(BOOL_VAL(isFalsey(pop())));
+                break;
+            }
             case OP_NEGATE:
             {
-                vm.stack[vm.stackCount - 1] *= -1;
+                if (!IS_NUMBER(peek(0)))
+                {
+                    runtimeError("Operand must be a number.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.stack[vm.stackCount - 1].as.number *= -1;
                 break;
             }
             case OP_RETURN:

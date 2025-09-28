@@ -7,6 +7,6 @@
 
 #define DEBUG_PRINT_CODE
 #define DEBUG_TRACE_EXECUTION
-#define TIME_RUN
+// #define TIME_RUN
 
 #endif
