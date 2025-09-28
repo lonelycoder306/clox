@@ -38,7 +38,6 @@ static void repl()
     {
         // Clear line and temp each iteration.
         memset(line.string, '\0', line.capacity);
-        // memset(line, '\0', line.capacity);
         memset(temp, '\0', sizeof(temp));
         printf(">>> ");
 
