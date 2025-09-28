@@ -1,6 +1,9 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #include "../include/chunk.h"
 #include "../include/common.h"
 #include "../include/debug.h"
+#include "../include/memory.h"
 #include "../include/vm.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,17 +11,65 @@
 #include <time.h>
 // #include "../include/heap.h"
 
+typedef struct {
+    char* string;
+    int length;
+    int capacity;
+} inputLine;
+
+static void growLine(inputLine* line, const char* temp, int shift)
+{
+    if (line->capacity < line->length + (int) strlen(temp) + shift)
+    {
+        int oldCapacity = line->capacity;
+        line->capacity = GROW_CAPACITY(line->capacity);
+        line->string = GROW_ARRAY(char, line->string, oldCapacity,
+                            line->capacity);
+    }
+}
+
 static void repl()
 {
-    char line[1024];
+    inputLine line = { .string = NULL, .length = 1024, .capacity = 1024 };
+    line.string = GROW_ARRAY(char, line.string, 0, line.capacity);
+    char temp[256];
 
     while (true)
     {
+        // Clear line and temp each iteration.
+        memset(line.string, '\0', line.capacity);
+        // memset(line, '\0', line.capacity);
+        memset(temp, '\0', sizeof(temp));
         printf(">>> ");
-        if (*fgets(line, sizeof(line), stdin) == '\n')
+
+        do
+        {
+            if (strlen(line.string) != 0) // Beginning of input.
+                printf("... ");
+            memset(temp, '\0', sizeof(temp));
+            fgets(temp, sizeof(temp), stdin);
+            // strlen - 2 since the last character is \n (when Enter is pressed),
+            // not \.
+            if ((strlen(temp) > 1) && (temp[strlen(temp) - 2] == '\\'))
+            {
+                growLine(&line, temp, -1);
+                strncat(line.string, temp, strlen(temp) - 2);
+                strcat(line.string, "\n");
+                line.length += (int) strlen(temp) - 1;
+            }
+            else
+            {
+                growLine(&line, temp, 1);
+                strcat(line.string, temp);
+                strcat(line.string, "\n");
+                line.length += (int) strlen(temp) + 1;
+            }
+        } while ((strlen(temp) > 1) && (temp[strlen(temp) - 2] == '\\'));
+
+        if (line.string[0] == '\n')
             break;
 
-        interpret(line);
+        interpret(line.string);
     }
 }
 
