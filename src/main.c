@@ -26,6 +26,8 @@ static void growLine(inputLine* line, const char* temp, int shift)
         line->string = GROW_ARRAY(char, line->string, oldCapacity,
                             line->capacity);
     }
+
+    memset(line->string + line->length, '\0', line->capacity - line->length);
 }
 
 static void repl()
@@ -119,7 +121,7 @@ int main(int argc, const char* argv[])
 {
     clock_t start, end;
     double cpu_time_used;
-    (void) cpu_time_used;
+    (void) start; (void) end; (void) cpu_time_used;
     start = clock();
     initVM();
     
