@@ -142,7 +142,28 @@ static InterpretResult run()
 // Interpret pipeline driver.
 InterpretResult interpret(const char* source)
 {
-    // Call compiler.
-    compile(source);
-    return INTERPRET_OK;
+    Chunk chunk;
+    initChunk(&chunk);
+
+    // Call compiler to scan source code
+    // and construct byte-code chunk.
+    if(!compile(source, &chunk))
+    {
+        // Discard unusable chunk if 
+        // compile error occurred.
+        freeChunk(&chunk);
+        return INTERPRET_COMPILE_ERROR;
+    };
+
+    // Prepare VM with constructed chunk.
+    vm.chunk = &chunk;
+    // Instruction pointer starts at beginning
+    // of chunk byte-code.
+    vm.ip = vm.chunk->code;
+
+    // Run the VM.
+    InterpretResult result = run();
+
+    freeChunk(&chunk);
+    return result;
 }
