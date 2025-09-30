@@ -10,7 +10,8 @@ typedef enum {
     VAL_BOOL,
     VAL_NIL,
     VAL_NUMBER,
-    VAL_OBJ // Heap allocated objects.
+    VAL_OBJ, // Heap allocated objects.
+    VAL_EMPTY // Used internally only for empty buckets in hash-table.
 } ValueType;
 
 typedef struct {
@@ -26,6 +27,7 @@ typedef struct {
 #define IS_NIL(value)       ((value).type == VAL_NIL)
 #define IS_NUMBER(value)    ((value).type == VAL_NUMBER)
 #define IS_OBJ(value)       ((value).type == VAL_OBJ)
+#define IS_EMPTY(value)     ((value).type == VAL_EMPTY)
 
 #define AS_BOOL(value)      ((value).as.boolean)
 #define AS_NUMBER(value)    ((value).as.number)
@@ -34,7 +36,8 @@ typedef struct {
 #define BOOL_VAL(value)     ((Value) {VAL_BOOL, {.boolean = value}})
 #define NIL_VAL             ((Value) {VAL_NIL, {.number = 0}})
 #define NUMBER_VAL(value)   ((Value) {VAL_NUMBER, {.number = value}})
-#define OBJ_VAL(object)      ((Value) {VAL_OBJ, {.obj = (Obj*) object}})
+#define OBJ_VAL(object)     ((Value) {VAL_OBJ, {.obj = (Obj*) object}})
+#define EMPTY_VAL           ((Value) {VAL_EMPTY, {.number = 0}})
 
 typedef struct {
     int capacity;
@@ -45,6 +48,7 @@ typedef struct {
 void initValueArray(ValueArray* array);
 void writeValueArray(ValueArray* array, Value value);
 void freeValueArray(ValueArray* array);
+uint32_t hashValue(Value value);
 void printValue(Value value);
 bool valuesEqual(Value a, Value b);
 

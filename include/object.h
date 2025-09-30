@@ -23,6 +23,7 @@ struct Obj {
 struct ObjString {
     Obj obj;
     int length;
+    uint32_t hash;
     // Was:
     // char* chars;
     // Now:
@@ -31,6 +32,7 @@ struct ObjString {
 
 ObjString* makeString(int length);
 ObjString* copyString(const char* chars, int length);
+uint32_t hashString(const char* key, int length);
 void printObject(Value value);
 
 static inline bool isObjType(Value value, ObjType type)

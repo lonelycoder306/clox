@@ -4,6 +4,7 @@
 #include "../include/debug.h"
 #include "../include/memory.h"
 #include "../include/object.h"
+#include "../include/table.h"
 #include "../include/value.h"
 #include <stdarg.h>
 #include <stdio.h>
@@ -23,10 +24,12 @@ void initVM()
     vm.stackCapacity = 0;
     resetStack();
     vm.objects = NULL;
+    initTable(&vm.strings);
 }
 
 void freeVM()
 {
+    freeTable(&vm.strings);
     freeObjects();
     FREE_ARRAY(Value, vm.stack, vm.stackCapacity);
 }
@@ -83,8 +86,21 @@ static void concatenate()
     ObjString* result = makeString(length + 1);
     memcpy(result->chars, a->chars, a->length);
     memcpy(result->chars + a->length, b->chars, b->length);
-    result->chars[length] = '\0';
+
+    uint32_t hash = hashString(result->chars, result->length);
+    ObjString* interned = tableFindString(&vm.strings, result->chars,
+                                            result->length, hash);
     
+    if (interned != NULL)
+    {
+        reallocate(result, sizeof(ObjString) + result->length + 1, 0);
+        push(OBJ_VAL(interned));
+        return;
+    }
+
+    result->chars[length] = '\0';
+    result->hash = hash;
+
     push(OBJ_VAL(result));
 }
 
