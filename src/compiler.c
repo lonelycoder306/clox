@@ -2,6 +2,7 @@
 #include "../include/chunk.h"
 #include "../include/common.h"
 #include "../include/debug.h"
+#include "../include/object.h"
 #include "../include/scanner.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -180,6 +181,14 @@ static void number()
         emitConstant(NUMBER_VAL(value));
 }
 
+static void string()
+{
+    // +1 to skip leading ".
+    // -2 to trim trailing " (full string would be -1).
+    emitConstant(OBJ_VAL(copyString(parser.previous.start + 1, 
+                                    parser.previous.length -2)));
+}
+
 static void literal()
 {
     switch (parser.previous.type)
@@ -198,7 +207,7 @@ static void binary()
     parsePrecedence((Precedence)(rule->precedence + 1));
 
     Chunk* chunk = currentChunk();
-    bool zero = (*(chunk->code + chunk->count - 1) == OP_ZERO);
+    bool zero = (chunk->code[chunk->count - 1] == OP_ZERO);
 
     switch (operatorType)
     {
@@ -265,7 +274,7 @@ ParseRule rules[] = {
     [TOKEN_LESS]            = {NULL,        binary,         PREC_COMPARISON},
     [TOKEN_LESS_EQUAL]      = {NULL,        binary,         PREC_COMPARISON},
     [TOKEN_IDENTIFIER]      = {NULL,        NULL,           PREC_NONE},
-    [TOKEN_STRING]          = {NULL,        NULL,           PREC_NONE},
+    [TOKEN_STRING]          = {string,      NULL,           PREC_NONE},
     [TOKEN_NUMBER]          = {number,      NULL,           PREC_NONE},
     [TOKEN_AND]             = {NULL,        NULL,           PREC_NONE},
     [TOKEN_CLASS]           = {NULL,        NULL,           PREC_NONE},
