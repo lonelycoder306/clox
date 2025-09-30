@@ -20,33 +20,24 @@ static Obj* allocateObject(size_t size, ObjType type)
     return object;
 }
 
-// Allocates Obj object with OBJ_STRING type,
-// then completes the ObjString object for it.
-static ObjString* allocateString(char* chars, int length)
+// Creates an ObjString object with enough size.
+// No initial char string stored in the object.
+ObjString* makeString(int length)
 {
-    ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
+    ObjString* string = (ObjString *) allocateObject(
+            sizeof(ObjString) + length + 1, OBJ_STRING);
     string->length = length;
-    string->chars = chars;
     return string;
 }
 
-// Creates an ObjString object around a string that we
-// already constructed elsewhere.
-// Takes ownership of string unlike copyString.
-ObjString* takeString(char* chars, int length)
-{
-    return allocateString(chars, length);
-}
-
-// Creates the pure char* string that the ObjString
-// object will own, then sends it to allocateString.
-// chars parameter points into source string.
+// Creates the full ObjString object with its char
+// array taken from the given string.
 ObjString* copyString(const char* chars, int length)
 {
-    char* heapChars = ALLOCATE(char, length + 1);
-    memcpy(heapChars, chars, length);
-    heapChars[length] = '\0';
-    return allocateString(heapChars, length);
+    ObjString* string = makeString(length);
+    memcpy(string->chars, chars, length);
+    string->chars[length] = '\0';
+    return string;
 }
 
 void printObject(Value value)
