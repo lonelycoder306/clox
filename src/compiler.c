@@ -47,8 +47,8 @@ typedef struct {
 
 typedef struct {
     Local* vars;
-    int localCount;
-    int localCapacity;
+    int count;
+    int capacity;
 } LocalArray;
 
 typedef struct {
@@ -200,21 +200,21 @@ static void emitConstant(Value value)
 // Operand is usually some variable index.
 static void splitOperand(int index)
 {
-    emitByte((uint8_t)((index >> 16) & 0xff));
-    emitByte((uint8_t)((index >> 8) & 0xff));
-    emitByte((uint8_t)(index & 0xff));
+    emitByte((uint8_t) ((index >> 16) & 0xff));
+    emitByte((uint8_t) ((index >> 8) & 0xff));
+    emitByte((uint8_t) (index & 0xff));
 }
 
 static void initLocalArray(LocalArray* locals)
 {
-    locals->localCount = 0;
-    locals->localCapacity = 0;
+    locals->count = 0;
+    locals->capacity = 0;
     locals->vars = NULL;
 }
 
 static void freeLocalArray(LocalArray* locals)
 {
-    FREE_ARRAY(Local, locals->vars, locals->localCapacity);
+    FREE_ARRAY(Local, locals->vars, locals->capacity);
     initLocalArray(locals);
 }
 
@@ -248,12 +248,12 @@ static void endScope()
     LocalArray* locals = &current->locals;
     int numPop = 0;
 
-    while (locals->localCount > 0 &&
-            locals->vars[locals->localCount - 1].depth >
+    while (locals->count > 0 &&
+            locals->vars[locals->count - 1].depth >
                 current->scopeDepth)
     {
         numPop++;
-        locals->localCount--;
+        locals->count--;
     }
 
     if (numPop == 1)
@@ -358,23 +358,23 @@ static bool identifiersEqual(Token* a, Token* b)
 // compiler.
 static void addLocal(Token name, LocalArray* locals)
 {
-    if (locals->localCapacity < locals->localCount + 1)
+    if (locals->capacity < locals->count + 1)
     {
-        int oldCapacity = locals->localCapacity;
-        locals->localCapacity = GROW_CAPACITY(oldCapacity);
+        int oldCapacity = locals->capacity;
+        locals->capacity = GROW_CAPACITY(oldCapacity);
         locals->vars = GROW_ARRAY(Local, locals->vars, oldCapacity,
-                                        locals->localCapacity);
+                                        locals->capacity);
     }
     
     // Get pointer to last slot in current->locals.
-    Local* local = &locals->vars[locals->localCount++];
+    Local* local = &locals->vars[locals->count++];
     local->name = name;
     local->depth = -1;
 }
 
 static int resolveLocal(LocalArray* locals, Token* name)
 {
-    for (int i = locals->localCount - 1; i >= 0; i--)
+    for (int i = locals->count - 1; i >= 0; i--)
     {
         Local* local = &locals->vars[i];
         if (identifiersEqual(name, &local->name))
@@ -394,7 +394,7 @@ static void declareVariable()
     if (current->scopeDepth == 0) return;
 
     Token* name = &parser.previous;
-    for (int i = current->locals.localCount - 1; i >=0; i--)
+    for (int i = current->locals.count - 1; i >=0; i--)
     {
         Local* local = &current->locals.vars[i];
         // We check every variable in the current scope, and exit
@@ -427,9 +427,9 @@ static int parseVariable(const char* errorMessage)
 static void markInitialized(Access accessType)
 {
     LocalArray* locals = &current->locals;
-    locals->vars[locals->localCount - 1].depth =
+    locals->vars[locals->count - 1].depth =
         current->scopeDepth;
-    tableSet(&vm.localAccess, NUMBER_VAL((double) (locals->localCount - 1)),
+    tableSet(&vm.localAccess, NUMBER_VAL((double) (locals->count - 1)),
                                         NUMBER_VAL((double) accessType));
 }
 
