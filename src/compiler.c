@@ -424,19 +424,22 @@ static int parseVariable(const char* errorMessage)
 
 // Marks a local variable as initialized once its
 // declaration is complete.
-static void markInitialized()
+static void markInitialized(Access accessType)
 {
-    current->locals.vars[current->locals.localCount - 1].depth =
+    LocalArray* locals = &current->locals;
+    locals->vars[locals->localCount - 1].depth =
         current->scopeDepth;
+    tableSet(&vm.localAccess, NUMBER_VAL((double) (locals->localCount - 1)),
+                                        NUMBER_VAL((double) accessType));
 }
 
 // Emits byte-code for global variable declaration
 // and marks local variables as initialized.
-static void defineVariable(int global)
+static void defineVariable(int global, Access accessType)
 {
     if (current->scopeDepth > 0)
     {
-        markInitialized();
+        markInitialized(accessType);
         return;
     }
     
@@ -450,6 +453,9 @@ static void defineVariable(int global)
     }
     else
         emitBytes(OP_SHORT, (uint8_t) global);
+    
+    tableSet(&vm.globalAccess, NUMBER_VAL((double) global), 
+                                NUMBER_VAL((double) accessType));
 }
 
 // Emits byte-code for variable access or assignment.
@@ -569,7 +575,7 @@ static void block()
     consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
 }
 
-static void varDeclaration()
+static void varDeclaration(Access accessType)
 {
     int global = parseVariable("Expect variable name.");
 
@@ -580,7 +586,7 @@ static void varDeclaration()
     
     consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
     // Only define if no compilation problem.
-    defineVariable(global);
+    defineVariable(global, accessType);
 }
 
 static void printStatement()
@@ -611,7 +617,9 @@ static void statement()
 static void declaration()
 {
     if (match(TOKEN_VAR))
-        varDeclaration();
+        varDeclaration(ACCESS_VAR);
+    else if (match(TOKEN_FIX))
+        varDeclaration(ACCESS_FIX);
     else if (match(TOKEN_LEFT_BRACE))
     {
         beginScope();

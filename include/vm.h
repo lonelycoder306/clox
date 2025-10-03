@@ -5,18 +5,28 @@
 #include "table.h"
 #include "value.h"
 
-#define STACK_MAX 256
+typedef enum {
+    ACCESS_FIX,
+    ACCESS_VAR
+} Access;
 
 typedef struct {
     Chunk* chunk; // Chunk being executed in the VM.
     uint8_t* ip; // Pointer to the instruction about to be executed.
+
     Value* stack;
     int stackCount;
     int stackCapacity;
-    Table strings;
-    Table globalNames;
-    ValueArray globalValues;
-    Obj* objects;
+
+    Table strings; // To hold our interned strings.
+
+    Table globalNames; // Table of name-(value index) pairs of global variables.
+    ValueArray globalValues; // To hold values of global variables.
+
+    Table globalAccess; // Tables of variable-accessibility pairs.
+    Table localAccess;
+
+    Obj* objects; // Linked list of (most) allocated objects.
 } VM;
 
 typedef enum {
