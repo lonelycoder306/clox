@@ -331,11 +331,26 @@ static void binary(bool canAssign)
 
     Chunk* chunk = currentChunk();
     bool zero = (chunk->code[chunk->count - 1] == OP_ZERO);
+    bool one = (chunk->code[chunk->count - 1] == OP_ONE);
 
     switch (operatorType)
     {
-        case TOKEN_PLUS:            emitByte(OP_ADD); break;
-        case TOKEN_MINUS:           emitByte(OP_SUBTRACT); break;
+        case TOKEN_PLUS:
+        {
+            if (one)
+                chunk->code[chunk->count - 1] = OP_INCREMENT;
+            else
+                emitByte(OP_ADD);
+            break;
+        }
+        case TOKEN_MINUS:
+        {
+            if (one)
+                chunk->code[chunk->count - 1] = OP_DECREMENT;
+            else
+                emitByte(OP_SUBTRACT);
+            break;
+        }
         case TOKEN_STAR:            emitByte(OP_MULTIPLY); break;
         case TOKEN_SLASH:           emitByte(OP_DIVIDE); break;
         case TOKEN_EQUAL_EQUAL:     emitByte(zero ? OP_COMPZER0 : OP_EQUAL); break;

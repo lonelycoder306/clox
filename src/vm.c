@@ -238,11 +238,21 @@ static InterpretResult run()
             case OP_LESS:       BINARY_OP(BOOL_VAL, <); break;
             case OP_INCREMENT:
             {
+                if (!IS_NUMBER(peek(0)))
+                {
+                    runtimeError("Operand must be a number.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
                 vm.stack[vm.stackCount - 1].as.number++;
                 break;
             }
             case OP_DECREMENT:
             {
+                if (!IS_NUMBER(peek(0)))
+                {
+                    runtimeError("Operand must be a number.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
                 vm.stack[vm.stackCount - 1].as.number--;
                 break;
             }
