@@ -114,6 +114,7 @@ static InterpretResult run()
                             READ_BYTE())
     #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
     #define READ_CONSTLONG() (vm.chunk->constants.values[READ_TRIBYTE()])
+    #define READ_OPERAND() (READ_BYTE() == OP_LONG ? READ_TRIBYTE() : READ_BYTE())
     #define READ_STRING() AS_STRING(READ_CONSTANT())
     #define READ_STRING_LONG() AS_STRING(READ_CONSTLONG())
     #define BINARY_OP(valueType, op) \
@@ -190,29 +191,19 @@ static InterpretResult run()
             case OP_POP:    pop(); break;
             case OP_POPN:
             {
-                if (READ_BYTE() == OP_LONG)
-                    vm.stackCount -= READ_TRIBYTE();
-                else
-                    vm.stackCount -= READ_BYTE();
+                vm.stackCount -= READ_OPERAND();
                 break;
                 // No return since this is only for local variables.
                 // We don't return the last variable popped.
             }
             case OP_DEFINE_GLOBAL:
             {
-                if (READ_BYTE() == OP_LONG)
-                    vm.globalValues.values[READ_TRIBYTE()] = pop();
-                else
-                    vm.globalValues.values[READ_BYTE()] = pop();
+                vm.globalValues.values[READ_OPERAND()] = pop();
                 break;
             }
             case OP_GET_GLOBAL:
             {
-                Value value;
-                if (READ_BYTE() == OP_LONG)
-                    value = vm.globalValues.values[READ_TRIBYTE()];
-                else
-                    value = vm.globalValues.values[READ_BYTE()];
+                Value value = vm.globalValues.values[READ_OPERAND()];
                 if (IS_UNDEFINED(value))
                 {
                     runtimeError("Undefined variable.");
@@ -223,22 +214,12 @@ static InterpretResult run()
             }
             case OP_GET_LOCAL:
             {
-                int slot;
-                if (READ_BYTE() == OP_LONG)
-                    slot = READ_TRIBYTE();
-                else
-                    slot = (uint8_t) READ_BYTE();
-                push(vm.stack[slot]);
+                push(vm.stack[READ_OPERAND()]);
                 break;
             }
             case OP_SET_GLOBAL:
             {
-                int index;
-                if (READ_BYTE() == OP_LONG)
-                    index = READ_TRIBYTE();
-                else
-                    index = (uint8_t) READ_BYTE();
-                
+                int index = READ_OPERAND();
                 if (IS_UNDEFINED(vm.globalValues.values[index]))
                 {
                     runtimeError("Undefined variable.");
@@ -249,12 +230,7 @@ static InterpretResult run()
             }
             case OP_SET_LOCAL:
             {
-                int slot;
-                if (READ_BYTE() == OP_LONG)
-                    slot = READ_TRIBYTE();
-                else
-                    slot = (uint8_t) READ_BYTE();
-                vm.stack[slot] = peek(0);
+                vm.stack[READ_OPERAND()] = peek(0);
                 break;
             }
             case OP_EQUAL:
@@ -337,6 +313,7 @@ static InterpretResult run()
     #undef READ_TRIBYTE
     #undef READ_CONSTANT
     #undef READ_CONSTLONG
+    #undef READ_OPERAND
     #undef READ_STRING
     #undef READ_STRING_LONG
     #undef BINARY_OP
