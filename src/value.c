@@ -53,6 +53,7 @@ uint32_t hashValue(Value value)
         case VAL_NUMBER:    return hashDouble(AS_NUMBER(value));
         case VAL_OBJ:       return AS_STRING(value)->hash;
         case VAL_EMPTY:     return 0;
+        default:            return 0; // Unreachable.
     }
 }
 
@@ -63,9 +64,9 @@ void printValue(Value value)
         case VAL_BOOL:
             printf(AS_BOOL(value) ? "true" : "false");
             break;
-        case VAL_NIL: printf("nil"); break;
-        case VAL_NUMBER: printf("%g", AS_NUMBER(value)); break;
-        case VAL_OBJ: printObject(value); break;
+        case VAL_NIL:       printf("nil"); break;
+        case VAL_NUMBER:    printf("%g", AS_NUMBER(value)); break;
+        case VAL_OBJ:       printObject(value); break;
     }
 }
 
