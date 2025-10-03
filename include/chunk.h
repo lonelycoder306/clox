@@ -13,9 +13,15 @@ typedef enum {
     OP_MINUSONE,
     OP_CONSTANT, // Opcode | position in constant pool.
     OP_CONSTANT_LONG, // Opcode | position in constant pool.
+    OP_SHORT, // Index operand is 1 byte. Never seen by VM.
+    OP_LONG, // Index operand is 3 bytes, not 1. Never seen by VM.
     OP_NIL,
     OP_TRUE,
     OP_FALSE,
+    OP_POP,
+    OP_DEFINE_GLOBAL, // Opcode | length of operand | position in constant pool.
+    OP_GET_GLOBAL, // Opcode | length of operand | position in constant pool.
+    OP_SET_GLOBAL, // Opcode | length of operand | position in constant pool.
     OP_EQUAL,
     OP_GREATER,
     OP_LESS,
@@ -28,6 +34,7 @@ typedef enum {
     OP_DIVIDE,
     OP_NOT,
     OP_NEGATE,
+    OP_PRINT,
     OP_RETURN
 } OpCode;
 
@@ -52,12 +59,12 @@ void initChunk(Chunk* chunk);
 void freeChunk(Chunk* chunk);
 // Add single byte to chunk.
 void writeChunk(Chunk* chunk, uint8_t byte, int line);
+// Add constant to chunk pool.
+int addConstant(Chunk* chunk, Value value);
 // More constants in chunk.
 // The only function we should use to add a constant
 // to the chunk constant pool.
 void writeConstant(Chunk* chunk, Value value, int line);
-// Add constant to chunk pool.
-int addConstant(Chunk* chunk, Value value);
 // Get line of instruction by offset.
 int getLine(Chunk* chunk, int offset);
 

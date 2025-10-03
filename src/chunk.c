@@ -84,6 +84,12 @@ void writeChunk(Chunk* chunk, uint8_t byte, int line)
     chunk->count++;
 }
 
+int addConstant(Chunk* chunk, Value value)
+{
+    writeValueArray(&chunk->constants, value);
+    return chunk->constants.count - 1;
+}
+
 void writeConstant(Chunk* chunk, Value value, int line)
 {
     int index = addConstant(chunk, value);
@@ -99,12 +105,6 @@ void writeConstant(Chunk* chunk, Value value, int line)
         writeChunk(chunk, OP_CONSTANT, line);
         writeChunk(chunk, (uint8_t) index, line);
     }
-}
-
-int addConstant(Chunk* chunk, Value value)
-{
-    writeValueArray(&chunk->constants, value);
-    return chunk->constants.count - 1;
 }
 
 int getLine(Chunk* chunk, int offset)

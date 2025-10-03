@@ -11,7 +11,8 @@ typedef enum {
     VAL_NIL,
     VAL_NUMBER,
     VAL_OBJ, // Heap allocated objects.
-    VAL_EMPTY // Used internally only for empty buckets in hash-table.
+    VAL_EMPTY, // Used internally only for empty buckets in hash-table.
+    VAL_UNDEFINED // Undefined variable type.
 } ValueType;
 
 typedef struct {
@@ -28,6 +29,7 @@ typedef struct {
 #define IS_NUMBER(value)    ((value).type == VAL_NUMBER)
 #define IS_OBJ(value)       ((value).type == VAL_OBJ)
 #define IS_EMPTY(value)     ((value).type == VAL_EMPTY)
+#define IS_UNDEFINED(value) ((value).type == VAL_UNDEFINED)
 
 #define AS_BOOL(value)      ((value).as.boolean)
 #define AS_NUMBER(value)    ((value).as.number)
@@ -38,6 +40,7 @@ typedef struct {
 #define NUMBER_VAL(value)   ((Value) {VAL_NUMBER, {.number = value}})
 #define OBJ_VAL(object)     ((Value) {VAL_OBJ, {.obj = (Obj*) object}})
 #define EMPTY_VAL           ((Value) {VAL_EMPTY, {.number = 0}})
+#define UNDEFINED_VAL       ((Value) {VAL_UNDEFINED, {.number = 0}})
 
 typedef struct {
     int capacity;

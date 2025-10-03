@@ -24,12 +24,14 @@ void initVM()
     vm.stackCapacity = 0;
     resetStack();
     vm.objects = NULL;
-    initTable(&vm.strings);
+    initTable(&vm.globalNames);
+    initValueArray(&vm.globalValues);
 }
 
 void freeVM()
 {
-    freeTable(&vm.strings);
+    freeTable(&vm.globalNames);
+    freeValueArray(&vm.globalValues);
     freeObjects();
     FREE_ARRAY(Value, vm.stack, vm.stackCapacity);
 }
@@ -99,7 +101,7 @@ static void concatenate()
     }
 
     result->chars[length] = '\0';
-    result->hash = hash;
+    result->hash = hashString(result->chars, result->length);
 
     push(OBJ_VAL(result));
 }
@@ -108,10 +110,12 @@ static InterpretResult run()
 {
     #define READ_BYTE() (*vm.ip++) // Dereference then increment.
     #define READ_TRIBYTE() ((READ_BYTE() << 16) | \
-                          (READ_BYTE() << 8) | \
-                          READ_BYTE())
+                            (READ_BYTE() << 8) | \
+                            READ_BYTE())
     #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
     #define READ_CONSTLONG() (vm.chunk->constants.values[READ_TRIBYTE()])
+    #define READ_STRING() AS_STRING(READ_CONSTANT())
+    #define READ_STRING_LONG() AS_STRING(READ_CONSTLONG())
     #define BINARY_OP(valueType, op) \
             do \
             { \
@@ -183,6 +187,46 @@ static InterpretResult run()
             case OP_NIL:    push(NIL_VAL); break;
             case OP_TRUE:   push(BOOL_VAL(true)); break;
             case OP_FALSE:  push(BOOL_VAL(false)); break;
+            case OP_POP:    pop(); break;
+            case OP_DEFINE_GLOBAL:
+            {
+                if (READ_BYTE() == OP_LONG)
+                    vm.globalValues.values[READ_TRIBYTE()] = pop();
+                else
+                    vm.globalValues.values[READ_BYTE()] = pop();
+                break;
+            }
+            case OP_GET_GLOBAL:
+            {
+                Value value;
+                if (READ_BYTE() == OP_LONG)
+                    value = vm.globalValues.values[READ_TRIBYTE()];
+                else
+                    value = vm.globalValues.values[READ_BYTE()];
+                if (IS_UNDEFINED(value))
+                {
+                    runtimeError("Undefined variable.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                push(value);
+                break;
+            }
+            case OP_SET_GLOBAL:
+            {
+                int index;
+                if (READ_BYTE() == OP_LONG)
+                    index = READ_TRIBYTE();
+                else
+                    index = (uint8_t) READ_BYTE();
+                
+                if (IS_UNDEFINED(vm.globalValues.values[index]))
+                {
+                    runtimeError("Undefined variable.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                vm.globalValues.values[index] = peek(0);
+                break;
+            }
             case OP_EQUAL:
             {
                 Value b = pop();
@@ -205,9 +249,7 @@ static InterpretResult run()
             case OP_ADD:
             {
                 if (IS_STRING(peek(0)) && IS_STRING(peek(1)))
-                {
                     concatenate();
-                }
                 else if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(0)))
                 {
                     double b = AS_NUMBER(pop());
@@ -239,12 +281,15 @@ static InterpretResult run()
                 vm.stack[vm.stackCount - 1].as.number *= -1;
                 break;
             }
-            case OP_RETURN:
+            case OP_PRINT:
             {
                 printValue(pop());
                 printf("\n");
-                return INTERPRET_OK;
+                break;
             }
+            case OP_RETURN:
+                // Exit the interpreter.
+                return INTERPRET_OK;
         }
     }
 
@@ -252,6 +297,8 @@ static InterpretResult run()
     #undef READ_TRIBYTE
     #undef READ_CONSTANT
     #undef READ_CONSTLONG
+    #undef READ_STRING
+    #undef READ_STRING_LONG
     #undef BINARY_OP
 }
 
