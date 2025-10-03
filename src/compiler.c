@@ -596,7 +596,7 @@ static void expressionStatement()
     consume(TOKEN_SEMICOLON, "Expect ';' after value.");
     // Print out values of expression statements 
     // by default.
-    emitByte(OP_PRINT);
+    // emitByte(OP_PRINT);
     emitByte(OP_POP);
 }
 
