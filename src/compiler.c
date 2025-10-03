@@ -2,11 +2,13 @@
 #include "../include/chunk.h"
 #include "../include/common.h"
 #include "../include/debug.h"
+#include "../include/memory.h"
 #include "../include/object.h"
 #include "../include/scanner.h"
 #include "../include/table.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct {
     Token current;
@@ -38,9 +40,25 @@ typedef struct {
     Precedence precedence;
 } ParseRule;
 
+typedef struct {
+    Token name;
+    int depth;
+} Local;
+
+typedef struct {
+    Local* vars;
+    int localCount;
+    int localCapacity;
+} LocalArray;
+
+typedef struct {
+    LocalArray locals;
+    int scopeDepth;
+} Compiler;
+
 Parser parser;
+Compiler* current = NULL;
 Chunk* compilingChunk;
-Table stringConstants;
 
 static void expression();
 static void statement();
@@ -178,15 +196,80 @@ static void emitConstant(Value value)
     writeConstant(currentChunk(), value, parser.previous.line);
 }
 
+// Splits an opcode operand into 3 single-byte chunks.
+// Operand is usually some variable index.
+static void splitOperand(int index)
+{
+    emitByte((uint8_t)((index >> 16) & 0xff));
+    emitByte((uint8_t)((index >> 8) & 0xff));
+    emitByte((uint8_t)(index & 0xff));
+}
+
+static void initLocalArray(LocalArray* locals)
+{
+    locals->localCount = 0;
+    locals->localCapacity = 0;
+    locals->vars = NULL;
+}
+
+static void freeLocalArray(LocalArray* locals)
+{
+    FREE_ARRAY(Local, locals->vars, locals->localCapacity);
+    initLocalArray(locals);
+}
+
+static void initCompiler(Compiler* compiler)
+{
+    initLocalArray(&compiler->locals);
+    compiler->scopeDepth = 0;
+    current = compiler;
+}
+
 static void endCompiler()
 {
     emitReturn();
+    freeLocalArray(&current->locals);
     #ifdef DEBUG_PRINT_CODE
     // Only show chunk code if compiling was
     // successful.
     if (!parser.hadError)
         disassembleChunk(currentChunk(), "code");
     #endif
+}
+
+static void beginScope()
+{
+    current->scopeDepth++;
+}
+
+static void endScope()
+{
+    current->scopeDepth--;
+    LocalArray* locals = &current->locals;
+    int numPop = 0;
+
+    while (locals->localCount > 0 &&
+            locals->vars[locals->localCount - 1].depth >
+                current->scopeDepth)
+    {
+        numPop++;
+        locals->localCount--;
+    }
+
+    if (numPop == 1)
+    {
+        emitByte(OP_POP);
+        return;
+    }
+
+    emitByte(OP_POPN);
+    if (numPop < 256)
+        emitBytes(OP_SHORT, (uint8_t) numPop);
+    else
+    {
+        emitByte(OP_LONG);
+        splitOperand(numPop);
+    }
 }
 
 static void parsePrecedence(Precedence precedence)
@@ -248,21 +331,10 @@ static void literal(bool canAssign)
     }
 }
 
-// Splits a variable index in constant pool
-// to store as a 3-byte instruction operand.
-static void splitIndex(int index)
+// Returns value slot in vm.globalValues
+// associated with given variable identifier.
+static int identifierIndex(Token* name)
 {
-    emitByte((uint8_t) ((index >> 16) & 0xff));
-    emitByte((uint8_t) ((index >> 8) & 0xff));
-    emitByte((uint8_t) (index & 0xff));
-}
-
-static int identifierConstant(Token* name)
-{
-    // Store name in constant pool and add index
-    // to chunk.
-    // Name string too large to store directly.
-
     // See if we already have it.
     ObjString* identifier = copyString(name->start, name->length);
     Value indexValue;
@@ -276,48 +348,146 @@ static int identifierConstant(Token* name)
     return newIndex;
 }
 
+static bool identifiersEqual(Token* a, Token* b)
+{
+    if (a->length != b->length) return false;
+    return (memcmp(a->start, b->start, a->length) == 0);
+}
+
+// Adds new local variable to local array in current
+// compiler.
+static void addLocal(Token name, LocalArray* locals)
+{
+    if (locals->localCapacity < locals->localCount + 1)
+    {
+        int oldCapacity = locals->localCapacity;
+        locals->localCapacity = GROW_CAPACITY(oldCapacity);
+        locals->vars = GROW_ARRAY(Local, locals->vars, oldCapacity,
+                                        locals->localCapacity);
+    }
+    
+    // Get pointer to last slot in current->locals.
+    Local* local = &locals->vars[locals->localCount++];
+    local->name = name;
+    local->depth = -1;
+}
+
+static int resolveLocal(LocalArray* locals, Token* name)
+{
+    for (int i = locals->localCount - 1; i >= 0; i--)
+    {
+        Local* local = &locals->vars[i];
+        if (identifiersEqual(name, &local->name))
+        {
+            if (local->depth == -1)
+                error("Can't read local variable in its own initializer.");
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+// Declares local variables.
+static void declareVariable()
+{
+    if (current->scopeDepth == 0) return;
+
+    Token* name = &parser.previous;
+    for (int i = current->locals.localCount - 1; i >=0; i--)
+    {
+        Local* local = &current->locals.vars[i];
+        // We check every variable in the current scope, and exit
+        // once we're beyond that scope.
+        if (local->depth != -1 && local->depth < current->scopeDepth)
+            break;
+        
+        if (identifiersEqual(name, &local->name))
+            error("Already a variable with this name in this scope.");
+    }
+
+    addLocal(*name, &current->locals);
+}
+
+// Consumes identifier tokens for variables.
 static int parseVariable(const char* errorMessage)
 {
     // Gets the identifier token then sends it to
-    // identifierConstant.
+    // identifierIndex.
     consume(TOKEN_IDENTIFIER, errorMessage);
-    return identifierConstant(&parser.previous);
+
+    declareVariable();
+    if (current->scopeDepth > 0) return 0; // Local variable.
+
+    return identifierIndex(&parser.previous);
 }
 
+// Marks a local variable as initialized once its
+// declaration is complete.
+static void markInitialized()
+{
+    current->locals.vars[current->locals.localCount - 1].depth =
+        current->scopeDepth;
+}
+
+// Emits byte-code for global variable declaration
+// and marks local variables as initialized.
 static void defineVariable(int global)
 {
-    // global is the index of the identifier
-    // string in the constant pool.
+    if (current->scopeDepth > 0)
+    {
+        markInitialized();
+        return;
+    }
+    
+    // global is the index of the variable's
+    // value in vm.globalValues.
     emitByte(OP_DEFINE_GLOBAL);
     if (global > 255)
     {
         emitByte(OP_LONG);
-        splitIndex(global);
+        splitOperand(global);
     }
     else
         emitBytes(OP_SHORT, (uint8_t) global);
 }
 
+// Emits byte-code for variable access or assignment.
 static void namedVariable(Token name, bool canAssign)
 {
-    int arg = identifierConstant(&name);
+    uint8_t getOp, setOp;
+    int arg = resolveLocal(&current->locals, &name);
+    if (arg != -1)
+    {
+        getOp = OP_GET_LOCAL;
+        setOp = OP_SET_LOCAL;
+    }
+    else
+    {
+        arg = identifierIndex(&name);
+        getOp = OP_GET_GLOBAL;
+        setOp = OP_SET_GLOBAL;
+    }
+
     if (canAssign && match(TOKEN_EQUAL))
     {
         expression();
-        emitByte(OP_SET_GLOBAL);
+        emitByte(setOp);
     }
     else
-        emitByte(OP_GET_GLOBAL);
+        emitByte(getOp);
     
     if (arg > 255)
     {
         emitByte(OP_LONG);
-        splitIndex(arg);
+        splitOperand(arg);
     }
     else
         emitBytes(OP_SHORT, (uint8_t) arg);
 }
 
+// For variable access/assignment after 
+// declaration.
 static void variable(bool canAssign)
 {
     namedVariable(parser.previous, canAssign);
@@ -337,23 +507,23 @@ static void binary(bool canAssign)
     {
         case TOKEN_PLUS:
         {
-            if (one)
+            /*if (one)
                 chunk->code[chunk->count - 1] = OP_INCREMENT;
-            else
+            else*/
                 emitByte(OP_ADD);
             break;
         }
         case TOKEN_MINUS:
         {
-            if (one)
+            /*if (one)
                 chunk->code[chunk->count - 1] = OP_DECREMENT;
-            else
+            else*/
                 emitByte(OP_SUBTRACT);
             break;
         }
         case TOKEN_STAR:            emitByte(OP_MULTIPLY); break;
         case TOKEN_SLASH:           emitByte(OP_DIVIDE); break;
-        case TOKEN_EQUAL_EQUAL:     emitByte(zero ? OP_COMPZER0 : OP_EQUAL); break;
+        case TOKEN_EQUAL_EQUAL:     emitByte(/*zero ? OP_COMPZER0 : */OP_EQUAL); break;
         case TOKEN_BANG_EQUAL:      emitBytes(OP_EQUAL, OP_NOT); break;
         case TOKEN_GREATER:         emitByte(OP_GREATER); break;
         case TOKEN_GREATER_EQUAL:   emitBytes(OP_LESS, OP_NOT); break;
@@ -391,6 +561,14 @@ static void expression()
     parsePrecedence(PREC_ASSIGNMENT);
 }
 
+static void block()
+{
+    while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF))
+        declaration();
+    
+    consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+}
+
 static void varDeclaration()
 {
     int global = parseVariable("Expect variable name.");
@@ -416,6 +594,9 @@ static void expressionStatement()
 {
     expression();
     consume(TOKEN_SEMICOLON, "Expect ';' after value.");
+    // Print out values of expression statements 
+    // by default.
+    emitByte(OP_PRINT);
     emitByte(OP_POP);
 }
 
@@ -431,6 +612,12 @@ static void declaration()
 {
     if (match(TOKEN_VAR))
         varDeclaration();
+    else if (match(TOKEN_LEFT_BRACE))
+    {
+        beginScope();
+        block();
+        endScope();
+    }
     else
         statement();
 
@@ -489,8 +676,9 @@ bool compile(const char* source, Chunk* chunk)
 {
     // Set up scanner.
     initScanner(source);
+    Compiler compiler;
+    initCompiler(&compiler);
     compilingChunk = chunk;
-    initTable(&stringConstants);
 
     parser.hadError = false;
     parser.panicMode = false;
@@ -499,6 +687,5 @@ bool compile(const char* source, Chunk* chunk)
     while (!match(TOKEN_EOF))
         declaration();
     endCompiler(); // Done compiling chunk.
-    freeTable(&stringConstants);
     return !parser.hadError;
 }

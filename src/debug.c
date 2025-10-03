@@ -37,7 +37,29 @@ static int simpleInstruction(const char* name, int offset)
     return offset + 1;
 }
 
-static int globalVarInstruction(const char* name, Chunk* chunk, int offset)
+// For generic instructions with variable-size operands.
+static int operInstruction(const char* name, Chunk* chunk, int offset)
+{
+    int operand;
+    int off;
+    if (chunk->code[offset + 1] == OP_LONG)
+    {
+        operand = ((chunk->code[offset + 2] << 16) |
+                    (chunk->code[offset + 3] << 8) |
+                    (chunk->code[offset + 4]));
+        off = 5;
+    }
+    else
+    {
+        operand = (uint8_t)chunk->code[offset + 2];
+        off = 3;
+    }
+    printf("%-16s %4d\n", name, operand);
+    return offset + off;
+}
+
+// For local and global variable instructions.
+static int varInstruction(const char* name, Chunk* chunk, int offset)
 {
     int index;
     int off;
@@ -91,12 +113,18 @@ int disassembleInstruction(Chunk* chunk, int offset)
             return simpleInstruction("OP_FALSE", offset);
         case OP_POP:
             return simpleInstruction("OP_POP", offset);
+        case OP_POPN:
+            return operInstruction("OP_POPN", chunk, offset);
         case OP_DEFINE_GLOBAL:
-            return globalVarInstruction("OP_DEFINE_GLOBAL", chunk, offset);
+            return varInstruction("OP_DEFINE_GLOBAL", chunk, offset);
         case OP_GET_GLOBAL:
-            return globalVarInstruction("OP_GET_GLOBAL", chunk, offset);
+            return varInstruction("OP_GET_GLOBAL", chunk, offset);
+        case OP_GET_LOCAL:
+            return varInstruction("OP_GET_LOCAL", chunk, offset);
         case OP_SET_GLOBAL:
-            return globalVarInstruction("OP_SET_GLOBAL", chunk, offset);
+            return varInstruction("OP_SET_GLOBAL", chunk, offset);
+        case OP_SET_LOCAL:
+            return varInstruction("OP_SET_LOCAL", chunk, offset);
         case OP_EQUAL:
             return simpleInstruction("OP_EQUAL", offset);
         case OP_GREATER:

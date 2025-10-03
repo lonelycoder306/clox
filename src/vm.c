@@ -188,6 +188,16 @@ static InterpretResult run()
             case OP_TRUE:   push(BOOL_VAL(true)); break;
             case OP_FALSE:  push(BOOL_VAL(false)); break;
             case OP_POP:    pop(); break;
+            case OP_POPN:
+            {
+                if (READ_BYTE() == OP_LONG)
+                    vm.stackCount -= READ_TRIBYTE();
+                else
+                    vm.stackCount -= READ_BYTE();
+                break;
+                // No return since this is only for local variables.
+                // We don't return the last variable popped.
+            }
             case OP_DEFINE_GLOBAL:
             {
                 if (READ_BYTE() == OP_LONG)
@@ -211,6 +221,16 @@ static InterpretResult run()
                 push(value);
                 break;
             }
+            case OP_GET_LOCAL:
+            {
+                int slot;
+                if (READ_BYTE() == OP_LONG)
+                    slot = READ_TRIBYTE();
+                else
+                    slot = (uint8_t) READ_BYTE();
+                push(vm.stack[slot]);
+                break;
+            }
             case OP_SET_GLOBAL:
             {
                 int index;
@@ -225,6 +245,16 @@ static InterpretResult run()
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 vm.globalValues.values[index] = peek(0);
+                break;
+            }
+            case OP_SET_LOCAL:
+            {
+                int slot;
+                if (READ_BYTE() == OP_LONG)
+                    slot = READ_TRIBYTE();
+                else
+                    slot = (uint8_t) READ_BYTE();
+                vm.stack[slot] = peek(0);
                 break;
             }
             case OP_EQUAL:

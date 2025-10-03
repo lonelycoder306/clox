@@ -19,9 +19,12 @@ typedef enum {
     OP_TRUE,
     OP_FALSE,
     OP_POP,
+    OP_POPN, // Opcode | length of operand | number of variables to pop.
     OP_DEFINE_GLOBAL, // Opcode | length of operand | position in constant pool.
     OP_GET_GLOBAL, // Opcode | length of operand | position in constant pool.
+    OP_GET_LOCAL, // Opcode | length of operand | position in constant pool.
     OP_SET_GLOBAL, // Opcode | length of operand | position in constant pool.
+    OP_SET_LOCAL, // Opcode | length of operand | position in constant pool.
     OP_EQUAL,
     OP_GREATER,
     OP_LESS,
