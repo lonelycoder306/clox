@@ -111,7 +111,8 @@ static void concatenate()
 static InterpretResult run()
 {
     #define READ_BYTE() (*vm.ip++) // Dereference then increment.
-    #define READ_TRIBYTE() ((READ_BYTE() << 16) | \
+    #define READ_SHORT() ((READ_BYTE() << 8) | (READ_BYTE()))
+    #define READ_TRIBYTE() (uint32_t) ((READ_BYTE() << 16) | \
                             (READ_BYTE() << 8) | \
                             READ_BYTE())
     #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
@@ -306,6 +307,14 @@ static InterpretResult run()
                 printf("\n");
                 break;
             }
+            case OP_JUMP: vm.ip += READ_SHORT(); break;
+            case OP_JUMP_IF_FALSE:
+            {
+                uint16_t offset = READ_SHORT();
+                if (isFalsey(peek(0))) vm.ip += offset;
+                break;
+            }
+            case OP_LOOP: vm.ip -= READ_SHORT(); break;
             case OP_RETURN:
                 // Exit the interpreter.
                 return INTERPRET_OK;
@@ -313,6 +322,7 @@ static InterpretResult run()
     }
 
     #undef READ_BYTE
+    #undef READ_SHORT
     #undef READ_TRIBYTE
     #undef READ_CONSTANT
     #undef READ_CONSTLONG

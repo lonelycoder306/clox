@@ -183,7 +183,7 @@ static void emitBytes(uint8_t byte1, uint8_t byte2)
     emitByte(byte2);
 }
 
-// Temporarily to print out value of expression.
+// Temporarily to exit execution.
 // Done at end of chunk.
 static void emitReturn()
 {
@@ -194,6 +194,40 @@ static void emitConstant(Value value)
 {
     // Different code to accommodate our changes.
     writeConstant(currentChunk(), value, parser.previous.line);
+}
+
+static int emitJump(uint8_t instruction)
+{
+    emitByte(instruction);
+    emitByte(0xff);
+    emitByte(0xff);
+    // Return position of first operand byte.
+    return currentChunk()->count - 2;
+}
+
+static void patchJump(int offset)
+{
+    // -1 since the count is 1 more than the index
+    // of the last instruction, and another -1 to
+    // skip the second operand byte as well.
+    int jump = currentChunk()->count - offset - 2;
+
+    if (jump > UINT16_MAX)
+        error("Too much code to jump over.");
+    
+    currentChunk()->code[offset] = (jump >> 8) & 0xff;
+    currentChunk()->code[offset + 1] = jump & 0xff;
+}
+
+static void emitLoop(int loopStart)
+{
+    emitByte(OP_LOOP);
+
+    int offset = currentChunk()->count - loopStart + 2;
+    if (offset > UINT16_MAX) error("Loop body too large.");
+
+    emitByte((offset >> 8) & 0xff);
+    emitByte(offset & 0xff);
 }
 
 // Splits an opcode operand into 3 single-byte chunks.
@@ -570,6 +604,29 @@ static void grouping(bool canAssign)
     consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
+static void and_(bool canAssign)
+{
+    int endJump = emitJump(OP_JUMP_IF_FALSE);
+
+    emitByte(OP_POP);
+    parsePrecedence(PREC_AND);
+
+    patchJump(endJump);
+}
+
+static void or_(bool canAssign)
+{
+    int elseJump = emitJump(OP_JUMP_IF_FALSE);
+    int endJump = emitJump(OP_JUMP);
+
+    patchJump(elseJump);
+    emitByte(OP_POP);
+
+    parsePrecedence(PREC_OR);
+
+    patchJump(endJump);
+}
+
 static void expression()
 {
     parsePrecedence(PREC_ASSIGNMENT);
@@ -604,6 +661,90 @@ static void printStatement()
     emitByte(OP_PRINT);
 }
 
+static void ifStatement()
+{
+    consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+    expression();
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+
+    int thenJump = emitJump(OP_JUMP_IF_FALSE);
+    emitByte(OP_POP);
+    statement();
+
+    // We do this before patching so our jump-if-false
+    // instruction can skip this instruction too if needed.
+    int elseJump = emitJump(OP_JUMP);
+
+    patchJump(thenJump);
+    emitByte(OP_POP);
+
+    if (match(TOKEN_ELSE)) statement();
+    patchJump(elseJump);
+}
+
+static void whileStatement()
+{
+    int loopStart = currentChunk()->count;
+    consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
+    expression();
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+
+    int exitJump = emitJump(OP_JUMP_IF_FALSE);
+    emitByte(OP_POP);
+    statement();
+    emitLoop(loopStart);
+
+    patchJump(exitJump);
+    emitByte(OP_POP);
+}
+
+static void forStatement()
+{
+    beginScope();
+    consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
+    if (match(TOKEN_SEMICOLON)) {}
+    else if (match(TOKEN_VAR))
+        varDeclaration(ACCESS_VAR);
+    else
+        expressionStatement();
+
+    int loopStart = currentChunk()->count;
+    int exitJump = -1;
+    if (!match(TOKEN_SEMICOLON))
+    {
+        expression();
+        consume(TOKEN_SEMICOLON, "Expect ';' after loop condition.");
+
+        // Jump out of the loop if the condition is false.
+        exitJump = emitJump(OP_JUMP_IF_FALSE);
+        emitByte(OP_POP); // Condition.
+    }
+
+    if (!match(TOKEN_RIGHT_PAREN))
+    {
+        int bodyJump = emitJump(OP_JUMP);
+        int incrementStart = currentChunk()->count;
+        expression();
+        emitByte(OP_POP); // Increment is only evaluated for side-effects.
+        consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
+
+        emitLoop(loopStart);
+        loopStart = incrementStart;
+        patchJump(bodyJump);
+    }
+
+    statement();
+    emitLoop(loopStart);
+    if (exitJump != -1)
+    {
+        patchJump(exitJump);
+        // Only pop if there is a condition expression
+        // in the first place.
+        emitByte(OP_POP);
+    }
+    endScope();
+}
+
 static void expressionStatement()
 {
     expression();
@@ -618,6 +759,18 @@ static void statement()
 {
     if (match(TOKEN_PRINT))
         printStatement();
+    else if (match(TOKEN_IF))
+        ifStatement();
+    else if (match(TOKEN_WHILE))
+        whileStatement();
+    else if (match(TOKEN_FOR))
+        forStatement();
+    else if (match(TOKEN_LEFT_BRACE))
+    {
+        beginScope();
+        block();
+        endScope();
+    }
     else
         expressionStatement();
 }
@@ -628,12 +781,6 @@ static void declaration()
         varDeclaration(ACCESS_VAR);
     else if (match(TOKEN_FIX))
         varDeclaration(ACCESS_FIX);
-    else if (match(TOKEN_LEFT_BRACE))
-    {
-        beginScope();
-        block();
-        endScope();
-    }
     else
         statement();
 
@@ -663,7 +810,7 @@ ParseRule rules[] = {
     [TOKEN_IDENTIFIER]      = {variable,    NULL,           PREC_NONE},
     [TOKEN_STRING]          = {string,      NULL,           PREC_NONE},
     [TOKEN_NUMBER]          = {number,      NULL,           PREC_NONE},
-    [TOKEN_AND]             = {NULL,        NULL,           PREC_NONE},
+    [TOKEN_AND]             = {NULL,        and_,           PREC_AND},
     [TOKEN_CLASS]           = {NULL,        NULL,           PREC_NONE},
     [TOKEN_ELSE]            = {NULL,        NULL,           PREC_NONE},
     [TOKEN_FALSE]           = {literal,     NULL,           PREC_NONE},
@@ -671,7 +818,7 @@ ParseRule rules[] = {
     [TOKEN_FUN]             = {NULL,        NULL,           PREC_NONE},
     [TOKEN_IF]              = {NULL,        NULL,           PREC_NONE},
     [TOKEN_NIL]             = {literal,     NULL,           PREC_NONE},
-    [TOKEN_OR]              = {NULL,        NULL,           PREC_NONE},
+    [TOKEN_OR]              = {NULL,        or_,            PREC_OR},
     [TOKEN_PRINT]           = {NULL,        NULL,           PREC_NONE},
     [TOKEN_RETURN]          = {NULL,        NULL,           PREC_NONE},
     [TOKEN_SUPER]           = {NULL,        NULL,           PREC_NONE},
