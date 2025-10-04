@@ -170,12 +170,12 @@ static InterpretResult run()
                     push(BOOL_VAL(valuesEqual(value, NUMBER_VAL(0))));
                 }
                 else
-                    push(NUMBER_VAL(0));
+                    push(NUMBER_VAL((double) 0));
                 break;
             }
-            case OP_ONE:        push(NUMBER_VAL(1)); break;
-            case OP_TWO:        push(NUMBER_VAL(2)); break;
-            case OP_MINUSONE:   push(NUMBER_VAL(-1)); break;
+            case OP_ONE:        push(NUMBER_VAL((double) 1)); break;
+            case OP_TWO:        push(NUMBER_VAL((double) 2)); break;
+            case OP_MINUSONE:   push(NUMBER_VAL((double) -1)); break;
             case OP_CONSTANT:
             {
                 Value constant = READ_CONSTANT();
