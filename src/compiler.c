@@ -462,21 +462,39 @@ static void defineVariable(int global, Access accessType)
 static void namedVariable(Token name, bool canAssign)
 {
     uint8_t getOp, setOp;
+    bool global;
     int arg = resolveLocal(&current->locals, &name);
     if (arg != -1)
     {
         getOp = OP_GET_LOCAL;
         setOp = OP_SET_LOCAL;
+        global = false;
     }
     else
     {
         arg = identifierIndex(&name);
         getOp = OP_GET_GLOBAL;
         setOp = OP_SET_GLOBAL;
+        global = true;
     }
 
     if (canAssign && match(TOKEN_EQUAL))
     {
+        Value value;
+        if (global)
+        {
+            if (tableGet(&vm.globalAccess, NUMBER_VAL((double) arg), &value) &&
+                (int) AS_NUMBER(value) == ACCESS_FIX)
+                    error("Fixed variable cannot be reassigned.");
+    
+        }
+        else
+        {
+            if (tableGet(&vm.localAccess, NUMBER_VAL((double) arg), &value) &&
+                (int) AS_NUMBER(value) == ACCESS_FIX)
+                    error("Fixed variable cannot be reassigned.");
+        }
+        
         expression();
         emitByte(setOp);
     }
@@ -505,9 +523,9 @@ static void binary(bool canAssign)
     ParseRule* rule = getRule(operatorType);
     parsePrecedence((Precedence)(rule->precedence + 1));
 
-    Chunk* chunk = currentChunk();
-    bool zero = (chunk->code[chunk->count - 1] == OP_ZERO);
-    bool one = (chunk->code[chunk->count - 1] == OP_ONE);
+    // Chunk* chunk = currentChunk();
+    // bool zero = (chunk->code[chunk->count - 1] == OP_ZERO);
+    // bool one = (chunk->code[chunk->count - 1] == OP_ONE);
 
     switch (operatorType)
     {

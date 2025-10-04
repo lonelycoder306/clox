@@ -228,29 +228,12 @@ static InterpretResult run()
                     return INTERPRET_RUNTIME_ERROR;
                 }
 
-                Value value;
-                tableGet(&vm.globalAccess, NUMBER_VAL((double) index), &value);
-                if ((int) AS_NUMBER(value) == ACCESS_FIX)
-                {
-                    runtimeError("Fixed variable cannot be reassigned.");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-
                 vm.globalValues.values[index] = peek(0);
                 break;
             }
             case OP_SET_LOCAL:
             {
-                int index = READ_OPERAND();
-                Value value;
-                tableGet(&vm.localAccess, NUMBER_VAL((double) index), &value);
-                if ((int) AS_NUMBER(value) == ACCESS_FIX)
-                {
-                    runtimeError("Fixed variable cannot be reassigned.");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                
-                vm.stack[index] = peek(0);
+                vm.stack[READ_OPERAND()] = peek(0);
                 break;
             }
             case OP_EQUAL:
