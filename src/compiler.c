@@ -795,7 +795,7 @@ static void matchStruct()
 
         int falseJump = emitJump(OP_JUMP_IF_FALSE);
         // If we have a match, we pop the result of
-        // the comparison.
+        // the comparison and the match value.
         emitBytes(OP_POPN, OP_SHORT);
         emitByte((uint8_t) 2);
         statement();
@@ -809,7 +809,7 @@ static void matchStruct()
 
     consume(TOKEN_RIGHT_BRACE, "Expect '}' after cases.");
 
-    // Pop the match value.
+    // Pop the match value if OP_JUMP didn't run.
     emitByte(OP_POP);
     for (int i = 0; i < caseNum; i++)
         patchJump(cases[i]);
