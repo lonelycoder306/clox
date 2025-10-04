@@ -14,7 +14,7 @@ void disassembleChunk(Chunk* chunk, const char* name)
 static int constantInstruction(const char* name, Chunk* chunk, int offset)
 {
     uint8_t index = chunk->code[offset + 1];
-    printf("%-16s %4d '", name, index);
+    printf("%-20s %4d '", name, index);
     printValue(chunk->constants.values[index]);
     printf("'\n");
     return offset + 2;
@@ -25,7 +25,7 @@ static int constLongInstruction(const char* name, Chunk* chunk, int offset)
     int index = ((chunk->code[offset + 1] << 16) |
                     (chunk->code[offset + 2] << 8) |
                     (chunk->code[offset + 3]));
-    printf("%-16s %4d '", name, index);
+    printf("%-20s %4d '", name, index);
     printValue(chunk->constants.values[index]);
     printf("'\n");
     return offset + 4;
@@ -54,7 +54,7 @@ static int operInstruction(const char* name, Chunk* chunk, int offset)
         operand = (uint8_t)chunk->code[offset + 2];
         off = 3;
     }
-    printf("%-16s %4d\n", name, operand);
+    printf("%-20s %4d\n", name, operand);
     return offset + off;
 }
 
@@ -76,7 +76,7 @@ static int varInstruction(const char* name, Chunk* chunk, int offset)
         off = 3;
     }
 
-    printf("%-16s %4s  %d\n", name, "VAR", index);
+    printf("%-20s %4s  %d\n", name, "VAR", index);
     return offset + off;
 }
 
@@ -86,7 +86,7 @@ static int jumpInstruction(const char* name, int sign, Chunk* chunk,
     uint16_t jump = (uint16_t) (chunk->code[offset + 1] << 8);
     jump |= chunk->code[offset + 2];
     // Print the offset of the instruction we will jump to.
-    printf("%-16s %4d -> %d\n", name, offset, 
+    printf("%-20s %4d -> %d\n", name, offset, 
             offset + 3 + sign * jump);
     return offset + 3;
 }
@@ -116,6 +116,8 @@ int disassembleInstruction(Chunk* chunk, int offset)
             return constantInstruction("OP_CONSTANT", chunk, offset);
         case OP_CONSTANT_LONG:
             return constLongInstruction("OP_CONSTANT_LONG", chunk, offset);
+        case OP_DUP:
+            return simpleInstruction("OP_DUP", offset);
         case OP_NIL:
             return simpleInstruction("OP_NIL", offset);
         case OP_TRUE:

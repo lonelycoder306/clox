@@ -161,6 +161,7 @@ static void synchronize()
             case TOKEN_WHILE:
             case TOKEN_PRINT:
             case TOKEN_RETURN:
+            case TOKEN_MATCH:
                 return;
             default:
                 ; // Do nothing.
@@ -654,6 +655,16 @@ static void varDeclaration(Access accessType)
     defineVariable(global, accessType);
 }
 
+static void expressionStatement()
+{
+    expression();
+    consume(TOKEN_SEMICOLON, "Expect ';' after value.");
+    // Print out values of expression statements 
+    // by default.
+    // emitByte(OP_PRINT);
+    emitByte(OP_POP);
+}
+
 static void printStatement()
 {
     expression();
@@ -745,14 +756,64 @@ static void forStatement()
     endScope();
 }
 
-static void expressionStatement()
+static void matchStruct()
 {
+    #define MAX_CASES 100
+    
+    consume(TOKEN_LEFT_PAREN, "Expect '(' after 'match'.");
     expression();
-    consume(TOKEN_SEMICOLON, "Expect ';' after value.");
-    // Print out values of expression statements 
-    // by default.
-    // emitByte(OP_PRINT);
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after match value.");
+    consume(TOKEN_LEFT_BRACE, "Expect '{' before cases.");
+
+    int cases[MAX_CASES];
+    int caseNum = 0;
+
+    while (match(TOKEN_IS))
+    {
+        if (caseNum == 100)
+            error("Too many cases in structure.");
+        
+        if (match(TOKEN_Q_MARK))
+        {
+            consume(TOKEN_COLON, "Expect ':' after default case.");
+            // Pop the match value.
+            emitByte(OP_POP);
+            statement();
+            // Small check.
+            if (match(TOKEN_IS))
+                error("Cannot have a case after the default case.");
+            break;
+        }
+
+        // Duplicate the match value so we don't 
+        // pop it with OP_EQUAL.
+        emitByte(OP_DUP);
+        // Compile the case value.
+        expression();
+        consume(TOKEN_COLON, "Expect ':' after case value.");
+        emitByte(OP_EQUAL); // Pops the duplicate.
+
+        int falseJump = emitJump(OP_JUMP_IF_FALSE);
+        // If we have a match, we pop the result of
+        // the comparison.
+        emitByte(OP_POP);
+        statement();
+        
+        cases[caseNum++] = emitJump(OP_JUMP);
+        patchJump(falseJump);
+        // Pop the result of the comparison if OP_JUMP
+        // didn't run.
+        emitByte(OP_POP);
+    }
+
+    consume(TOKEN_RIGHT_BRACE, "Expect '}' after cases.");
+    for (int i = 0; i < caseNum; i++)
+        patchJump(cases[i]);
+
+    // Pop the match value.
     emitByte(OP_POP);
+
+    #undef MAX_CASES
 }
 
 static void statement()
@@ -765,6 +826,8 @@ static void statement()
         whileStatement();
     else if (match(TOKEN_FOR))
         forStatement();
+    else if (match(TOKEN_MATCH))
+        matchStruct();
     else if (match(TOKEN_LEFT_BRACE))
     {
         beginScope();

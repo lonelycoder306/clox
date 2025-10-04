@@ -15,6 +15,7 @@ typedef enum {
     OP_CONSTANT_LONG, // Opcode | position in constant pool.
     OP_SHORT, // Index operand is 1 byte. Never seen by VM.
     OP_LONG, // Index operand is 3 bytes, not 1. Never seen by VM.
+    OP_DUP,
     OP_NIL,
     OP_TRUE,
     OP_FALSE,
