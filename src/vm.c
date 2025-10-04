@@ -111,15 +111,15 @@ static void concatenate()
 static InterpretResult run()
 {
     #define READ_BYTE() (*vm.ip++) // Dereference then increment.
-    #define READ_SHORT() ((READ_BYTE() << 8) | (READ_BYTE()))
-    #define READ_TRIBYTE() (uint32_t) ((READ_BYTE() << 16) | \
-                            (READ_BYTE() << 8) | \
-                            READ_BYTE())
+    #define READ_SHORT() \
+        (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
+    #define READ_TRIBYTE() \
+        (vm.ip += 3, (uint32_t)((vm.ip[-3] << 16) | (vm.ip[-2] << 8) | vm.ip[-1]))
     #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
-    #define READ_CONSTLONG() (vm.chunk->constants.values[READ_TRIBYTE()])
+    #define READ_CONST_LONG() (vm.chunk->constants.values[READ_TRIBYTE()])
     #define READ_OPERAND() (READ_BYTE() == OP_LONG ? READ_TRIBYTE() : READ_BYTE())
     #define READ_STRING() AS_STRING(READ_CONSTANT())
-    #define READ_STRING_LONG() AS_STRING(READ_CONSTLONG())
+    #define READ_STRING_LONG() AS_STRING(READ_CONST_LONG())
     #define BINARY_OP(valueType, op) \
             do \
             { \
@@ -184,10 +184,11 @@ static InterpretResult run()
             }
             case OP_CONSTANT_LONG:
             {
-                Value constant = READ_CONSTLONG();
+                Value constant = READ_CONST_LONG();
                 push(constant);
                 break;
             }
+            case OP_DUP:    push(peek(0)); break;
             case OP_NIL:    push(NIL_VAL); break;
             case OP_TRUE:   push(BOOL_VAL(true)); break;
             case OP_FALSE:  push(BOOL_VAL(false)); break;
@@ -325,7 +326,7 @@ static InterpretResult run()
     #undef READ_SHORT
     #undef READ_TRIBYTE
     #undef READ_CONSTANT
-    #undef READ_CONSTLONG
+    #undef READ_CONST_LONG
     #undef READ_OPERAND
     #undef READ_STRING
     #undef READ_STRING_LONG
