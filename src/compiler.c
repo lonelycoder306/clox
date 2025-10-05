@@ -59,6 +59,9 @@ typedef struct {
 Parser parser;
 Compiler* current = NULL;
 Chunk* compilingChunk;
+int continueJump = -1; // End of innermost loop (before loop instruction).
+int breakJump = -1; // End of innermost loop (after loop instruction).
+int loopDepth = 0; // Depth of innermost loop.
 
 static void expression();
 static void statement();
@@ -695,6 +698,10 @@ static void ifStatement()
 
 static void whileStatement()
 {
+    int surroundBreakJump = breakJump;
+    int surroundContinueJump = continueJump;
+
+    loopDepth++;
     int loopStart = currentChunk()->count;
     consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
     expression();
@@ -703,22 +710,36 @@ static void whileStatement()
     int exitJump = emitJump(OP_JUMP_IF_FALSE);
     emitByte(OP_POP);
     statement();
+
+    if (continueJump != -1)
+        patchJump(continueJump);
     emitLoop(loopStart);
 
     patchJump(exitJump);
     emitByte(OP_POP);
+
+    if (breakJump != -1)
+        patchJump(breakJump);
+
+    breakJump = surroundBreakJump;
+    continueJump = surroundContinueJump;
+    loopDepth--;
 }
 
 static void forStatement()
-{
+{   
+    int surroundBreakJump = breakJump;
+    int surroundContinueJump = continueJump;
+    
     beginScope();
+    loopDepth++;
     consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
     if (match(TOKEN_SEMICOLON)) {}
     else if (match(TOKEN_VAR))
         varDeclaration(ACCESS_VAR);
     else
         expressionStatement();
-
+    
     int loopStart = currentChunk()->count;
     int exitJump = -1;
     if (!match(TOKEN_SEMICOLON))
@@ -745,6 +766,10 @@ static void forStatement()
     }
 
     statement();
+
+    if (continueJump != -1)
+        patchJump(continueJump);
+
     emitLoop(loopStart);
     if (exitJump != -1)
     {
@@ -753,7 +778,15 @@ static void forStatement()
         // in the first place.
         emitByte(OP_POP);
     }
+
+    if (breakJump != -1)
+        patchJump(breakJump);
+
+    loopDepth--;
     endScope();
+
+    breakJump = surroundBreakJump;
+    continueJump = surroundContinueJump;
 }
 
 static void matchStruct()
@@ -817,6 +850,22 @@ static void matchStruct()
     #undef MAX_CASES
 }
 
+static void breakStatement()
+{
+    if (loopDepth == 0)
+        error("Cannot use 'break' outside of a loop.");
+    consume(TOKEN_SEMICOLON, "Expect ';' after 'break'.");
+    breakJump = emitJump(OP_JUMP);
+}
+
+static void continueStatement()
+{
+    if (loopDepth == 0)
+        error("Cannot use 'continue' outside of a loop.");
+    consume(TOKEN_SEMICOLON, "Expect ';' after 'continue'.");
+    continueJump = emitJump(OP_JUMP);
+}
+
 static void statement()
 {
     if (match(TOKEN_PRINT))
@@ -829,6 +878,10 @@ static void statement()
         forStatement();
     else if (match(TOKEN_MATCH))
         matchStruct();
+    else if (match(TOKEN_BREAK))
+        breakStatement();
+    else if (match(TOKEN_CONTINUE))
+        continueStatement();
     else if (match(TOKEN_LEFT_BRACE))
     {
         beginScope();
