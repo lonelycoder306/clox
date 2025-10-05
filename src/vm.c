@@ -46,7 +46,7 @@ static void runtimeError(const char* format, ...)
     va_end(args);
     fputs("\n", stderr);
 
-    size_t offset = vm.ip - vm.chunk->code - 1;
+    int offset = (int) (vm.ip - vm.chunk->code - 1);
     int line = getLine(vm.chunk, offset);
     fprintf(stderr, "[line %d] in script\n", line);
     resetStack();
