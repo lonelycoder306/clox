@@ -5,7 +5,13 @@
 #include <string.h>
 #include <time.h>
 
-const int nativesCount = 4;
+static ObjNative natives[4];
+static const int nativesCount = 4;
+
+static bool clockNative(int argCount, Value* args);
+static bool sqrtNative(int argCount, Value* args);
+static bool typeNative(int argCount, Value* args);
+static bool lengthNative(int argCount, Value* args);
 
 // Directly initializing each struct with {...}
 // didn't work for some reason.
@@ -48,14 +54,14 @@ void defineNatives()
         defineNative(&natives[i]);
 }
 
-bool clockNative(int argCount, Value* args)
+static bool clockNative(int argCount, Value* args)
 {    
     // Replace function in stack once computation is done.
     args[-1] = NUMBER_VAL((double) clock() / CLOCKS_PER_SEC);
     return true;
 }
 
-bool sqrtNative(int argCount, Value* args)
+static bool sqrtNative(int argCount, Value* args)
 {
     if (!IS_NUMBER(args[0]))
     {
@@ -68,7 +74,7 @@ bool sqrtNative(int argCount, Value* args)
     return true;
 }
 
-bool typeNative(int argCount, Value* args)
+static bool typeNative(int argCount, Value* args)
 {
     ObjString* typeName = NULL; // Dummy initial value.
     
@@ -109,7 +115,7 @@ bool typeNative(int argCount, Value* args)
     return true;
 }
 
-bool lengthNative(int argCount, Value* args)
+static bool lengthNative(int argCount, Value* args)
 {
     if (!IS_STRING(args[0]))
     {
