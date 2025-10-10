@@ -138,9 +138,12 @@ static bool callValue(Value callee, int argCount)
                 }
 
                 NativeFn native = AS_NATIVE(callee);
-                Value result = native(argCount, vm.stack + vm.stackCount - argCount);
-                vm.stackCount -= argCount + 1;
-                push(result);
+                if (!native(argCount, vm.stack + vm.stackCount - argCount))
+                {
+                    runtimeError(AS_CSTRING(vm.stack[vm.stackCount - argCount - 1]));
+                    return false;
+                };
+                vm.stackCount -= argCount;
                 return true;
             }
             default:

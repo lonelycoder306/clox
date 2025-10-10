@@ -36,7 +36,7 @@ typedef struct {
 } ObjFunction;
 
 // Value parameter points to the VM's stack.
-typedef Value (*NativeFn)(int argCount, Value* args);
+typedef bool (*NativeFn)(int argCount, Value* args);
 
 typedef struct {
     Obj obj;

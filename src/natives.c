@@ -48,17 +48,27 @@ void defineNatives()
         defineNative(&natives[i]);
 }
 
-Value clockNative(int argCount, Value* args)
+bool clockNative(int argCount, Value* args)
 {    
-    return NUMBER_VAL((double) clock() / CLOCKS_PER_SEC);
+    // Replace function in stack once computation is done.
+    args[-1] = NUMBER_VAL((double) clock() / CLOCKS_PER_SEC);
+    return true;
 }
 
-Value sqrtNative(int argCount, Value* args)
+bool sqrtNative(int argCount, Value* args)
 {
-    return NUMBER_VAL(sqrt(AS_NUMBER(args[0])));
+    if (!IS_NUMBER(args[0]))
+    {
+        ObjString* message = copyString("Invalid input to sqrt().", 24);
+        args[-1] = OBJ_VAL(message);
+        return false;
+    }
+    
+    args[-1] =  NUMBER_VAL(sqrt(AS_NUMBER(args[0])));
+    return true;
 }
 
-Value typeNative(int argCount, Value* args)
+bool typeNative(int argCount, Value* args)
 {
     ObjString* typeName = NULL; // Dummy initial value.
     
@@ -92,14 +102,22 @@ Value typeNative(int argCount, Value* args)
             break;
         }
         default:
-            ;
+            typeName = copyString("<unknown type>", 14);
     }
 
-    return OBJ_VAL(typeName);
+    args[-1] = OBJ_VAL(typeName);
+    return true;
 }
 
-Value lengthNative(int argCount, Value* args)
+bool lengthNative(int argCount, Value* args)
 {
-    // Assuming that argument is always a string.
-    return NUMBER_VAL((double) strlen(AS_CSTRING(args[0])));
+    if (!IS_STRING(args[0]))
+    {
+        ObjString* message = copyString("Invalid input to length().", 26);
+        args[-1] = OBJ_VAL(message);
+        return false;
+    }
+
+    args[-1] = NUMBER_VAL((double) strlen(AS_CSTRING(args[0])));
+    return true;
 }
