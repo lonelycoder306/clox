@@ -39,9 +39,10 @@ typedef enum {
     OP_NOT,
     OP_NEGATE,
     OP_PRINT,
-    OP_JUMP,
-    OP_JUMP_IF_FALSE,
-    OP_LOOP,
+    OP_JUMP, // Opcode | jump offset.
+    OP_JUMP_IF_FALSE, // Opcode | jump offset.
+    OP_LOOP, // Opcode | loop start offset.
+    OP_CALL, // Opcode | argument number.
     OP_RETURN
 } OpCode;
 
