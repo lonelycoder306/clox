@@ -40,7 +40,9 @@ typedef Value (*NativeFn)(int argCount, Value* args);
 
 typedef struct {
     Obj obj;
+    const char* name; // Bare string name.
     NativeFn function;
+    int arity;
 } ObjNative;
 
 struct ObjString {
@@ -54,7 +56,6 @@ struct ObjString {
 };
 
 ObjFunction* newFunction();
-ObjNative* newNative(NativeFn function);
 ObjString* makeString(int length);
 ObjString* copyString(const char* chars, int length);
 uint32_t hashString(const char* key, int length);

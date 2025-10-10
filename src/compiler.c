@@ -1065,20 +1065,6 @@ static ParseRule* getRule(TokenType type)
     return &rules[type];
 }
 
-static void defineNative(const char* name, NativeFn function)
-{
-    int index = vm.globalValues.count;
-    ObjString* identifier = copyString(name, (int) strlen(name));
-    writeValueArray(&vm.globalValues, OBJ_VAL(newNative(function)));
-    tableSet(&vm.globalNames, OBJ_VAL(identifier), NUMBER_VAL((double) index));
-}
-
-static void defineNatives()
-{
-    for (int i = 0; i < nativesCount; i++)
-        defineNative(natives[i].name, natives[i].function);
-}
-
 ObjFunction* compile(const char* source)
 {
     // Set up scanner.

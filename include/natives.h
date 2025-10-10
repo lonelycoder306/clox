@@ -6,18 +6,10 @@
 Value clockNative(int argCount, Value* args);
 Value sqrtNative(int argCount, Value* args);
 Value typeNative(int argCount, Value* args);
+Value lengthNative(int argCount, Value* args);
 
-typedef struct {
-    const char* name;
-    NativeFn function;
-} NativeObj;
+ObjNative natives[4];
 
-static NativeObj natives[] = {
-    {"clock", clockNative},
-    {"sqrt", sqrtNative},
-    {"type", typeNative}
-};
-
-static int nativesCount = 3;
+void defineNatives();
 
 #endif

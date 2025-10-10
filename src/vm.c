@@ -124,6 +124,19 @@ static bool callValue(Value callee, int argCount)
                 return call(AS_FUNCTION(callee), argCount);
             case OBJ_NATIVE:
             {
+                ObjNative* func = (ObjNative *) AS_OBJ(callee);
+                
+                if (argCount != func->arity)
+                {
+                    if (func->arity != 1)
+                        runtimeError("Expected %d arguments but got %d.",
+                            func->arity, argCount);
+                    else
+                        runtimeError("Expected 1 argument but got %d.",
+                            argCount);
+                    return false;
+                }
+
                 NativeFn native = AS_NATIVE(callee);
                 Value result = native(argCount, vm.stack + vm.stackCount - argCount);
                 vm.stackCount -= argCount + 1;

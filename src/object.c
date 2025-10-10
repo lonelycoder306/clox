@@ -30,13 +30,6 @@ ObjFunction* newFunction()
     return function;
 }
 
-ObjNative* newNative(NativeFn function)
-{
-    ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
-    native->function = function;
-    return native;
-}
-
 // Function to hash a string.
 uint32_t hashString(const char* key, int length)
 {
