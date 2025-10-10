@@ -96,8 +96,7 @@ static bool call(ObjFunction* function, int argCount)
             runtimeError("Expected %d arguments but got %d.",
                 function->arity, argCount);
         else
-            runtimeError("Expected 1 argument but got %d.",
-                argCount);
+            runtimeError("Expected 1 argument but got %d.", argCount);
         return false;
     }
 
