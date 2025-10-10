@@ -3,10 +3,10 @@
 
 #include <stdbool.h> // For bool.
 #include <stddef.h> // For NULL and size_t.
-#include <stdint.h> // For explicit-sized integer types.
+#include <stdint.h> // For fixed-size integer types.
 
-#define DEBUG_PRINT_CODE
-#define DEBUG_TRACE_EXECUTION
+// #define DEBUG_PRINT_CODE
+// #define DEBUG_TRACE_EXECUTION
 // #define TIME_RUN
 
 #endif

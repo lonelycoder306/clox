@@ -6,6 +6,6 @@
 
 // Returns true if compilation succeeded;
 // false otherwise.
-bool compile(const char* source, Chunk* chunk);
+ObjFunction* compile(const char* source);
 
 #endif

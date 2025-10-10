@@ -1,18 +1,27 @@
 #ifndef clox_vm_h
 #define clox_vm_h
 
-#include "chunk.h"
+#include "object.h"
 #include "table.h"
 #include "value.h"
+
+#define FRAMES_MAX 64
 
 typedef enum {
     ACCESS_FIX,
     ACCESS_VAR
 } Access;
 
+// Single ongoing function call.
 typedef struct {
-    Chunk* chunk; // Chunk being executed in the VM.
-    uint8_t* ip; // Pointer to the instruction about to be executed.
+    ObjFunction* function; // Pointer to callee.
+    uint8_t* ip; // Caller's ip to resume from after return.
+    Value* slots; // Pointer to first slot function can use.
+} CallFrame;
+
+typedef struct {
+    CallFrame frames[FRAMES_MAX];
+    int frameCount;
 
     Value* stack;
     int stackCount;
@@ -29,13 +38,13 @@ typedef struct {
     Obj* objects; // Linked list of (most) allocated objects.
 } VM;
 
+extern VM vm;
+
 typedef enum {
     INTERPRET_OK,
     INTERPRET_COMPILE_ERROR,
     INTERPRET_RUNTIME_ERROR
 } InterpretResult;
-
-extern VM vm;
 
 void initVM();
 void freeVM();

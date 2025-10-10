@@ -31,6 +31,19 @@ static void freeObject(Obj* object)
             reallocate(object, sizeof(ObjString) +  string->length + 1, 0);
             break;
         }
+        case OBJ_FUNCTION:
+        {
+            ObjFunction* function = (ObjFunction *) object;
+            freeChunk(&function->chunk);
+            FREE(ObjFunction, object);
+            // GC handles the function object's ObjString name.
+            break;
+        }
+        case OBJ_NATIVE:
+        {
+            FREE(ObjNative, object);
+            break;
+        }
     }
 }
 
