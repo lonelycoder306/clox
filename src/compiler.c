@@ -691,6 +691,22 @@ static void or_(bool canAssign)
     patchJump(endJump);
 }
 
+static void conditional(bool canAssign)
+{
+    int falseJump = emitJump(OP_JUMP_IF_FALSE);
+    // Expression is not falsey -> pop its value.
+    emitByte(OP_POP);
+    expression();
+    int trueJump = emitJump(OP_JUMP);
+    patchJump(falseJump);
+
+    consume(TOKEN_COLON, "Expect ':' separator between ternary branches.");
+    // Expression is falsey -> pop its value.
+    emitByte(OP_POP);
+    parsePrecedence(PREC_CONDITIONAL);
+    patchJump(trueJump);
+}
+
 static void expression()
 {
     parsePrecedence(PREC_ASSIGNMENT);
@@ -1027,6 +1043,8 @@ ParseRule rules[] = {
     [TOKEN_MINUS]           = {unary,       binary,         PREC_TERM},
     [TOKEN_PLUS]            = {NULL,        binary,         PREC_TERM},
     [TOKEN_SEMICOLON]       = {NULL,        NULL,           PREC_NONE},
+    [TOKEN_Q_MARK]          = {NULL,        conditional,    PREC_CONDITIONAL},
+    [TOKEN_COLON]           = {NULL,        NULL,           PREC_NONE},
     [TOKEN_SLASH]           = {NULL,        binary,         PREC_FACTOR},
     [TOKEN_STAR]            = {NULL,        binary,         PREC_FACTOR},
     [TOKEN_BANG]            = {unary,       NULL,           PREC_NONE},
