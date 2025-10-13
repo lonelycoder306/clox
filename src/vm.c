@@ -193,15 +193,15 @@ static InterpretResult run()
     // encourage compiler to store frame
     // in a register, accessing IP faster.
     CallFrame* frame = &vm.frames[vm.frameCount - 1];
+    register uint8_t* ip = frame->ip;
     
-    #define READ_BYTE() (*frame->ip++) // Dereference then increment.
+    #define READ_BYTE() (*ip++) // Dereference then increment.
     #define READ_SHORT() \
-        (frame->ip += 2, \
-            (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
+        (ip += 2, \
+            (uint16_t)((ip[-2] << 8) | ip[-1]))
     #define READ_TRIBYTE() \
-        (frame->ip += 3, \
-            (uint32_t)((frame->ip[-3] << 16) | \
-                        (frame->ip[-2] << 8) | frame->ip[-1]))
+        (ip += 3, \
+            (uint32_t)((ip[-3] << 16) | (ip[-2] << 8) | ip[-1]))
     #define READ_CONSTANT() \
         (frame->function->chunk.constants.values[READ_BYTE()])
     #define READ_CONST_LONG() \
@@ -214,6 +214,7 @@ static InterpretResult run()
             { \
                 if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) \
                 { \
+                    frame->ip = ip; \
                     runtimeError("Operands must be numbers."); \
                     return INTERPRET_RUNTIME_ERROR; \
                 } \
@@ -252,7 +253,7 @@ static InterpretResult run()
             // Handles OP_ZERO and OP_COMPZERO.
             case OP_ZERO:
             {
-                if (*frame->ip == OP_COMPZER0)
+                if (*ip == OP_COMPZER0)
                 {
                     Value value = pop();
                     (void) READ_BYTE(); // Skip the COMPZERO opcode.
@@ -299,6 +300,9 @@ static InterpretResult run()
                 Value value = vm.globalValues.values[READ_OPERAND()];
                 if (IS_UNDEFINED(value))
                 {
+                    // When we report a runtime error, 
+                    // it has to appear at the right instruction.
+                    frame->ip = ip;
                     runtimeError("Undefined variable.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
@@ -317,6 +321,7 @@ static InterpretResult run()
                 int index = READ_OPERAND();
                 if (IS_UNDEFINED(vm.globalValues.values[index]))
                 {
+                    frame->ip = ip;
                     runtimeError("Undefined variable.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
@@ -370,6 +375,7 @@ static InterpretResult run()
                 }
                 else
                 {
+                    frame->ip = ip;
                     runtimeError("Operands must be two numbers or two strings.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
@@ -396,6 +402,7 @@ static InterpretResult run()
             {
                 if (!IS_NUMBER(peek(0)))
                 {
+                    frame->ip = ip;
                     runtimeError("Operand must be a number.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
@@ -408,20 +415,22 @@ static InterpretResult run()
                 printf("\n");
                 break;
             }
-            case OP_JUMP: frame->ip += READ_SHORT(); break;
+            case OP_JUMP: ip += READ_SHORT(); break;
             case OP_JUMP_IF_FALSE:
             {
                 uint16_t offset = READ_SHORT();
-                if (isFalsey(peek(0))) frame->ip += offset;
+                if (isFalsey(peek(0))) ip += offset;
                 break;
             }
-            case OP_LOOP: frame->ip -= READ_SHORT(); break;
+            case OP_LOOP: ip -= READ_SHORT(); break;
             case OP_CALL:
             {
                 uint8_t argCount = READ_BYTE();
+                frame->ip = ip;
                 if (!callValue(peek(argCount), argCount))
                     return INTERPRET_RUNTIME_ERROR;
                 frame = &vm.frames[vm.frameCount - 1];
+                ip = frame->ip;
                 break;
             }
             case OP_RETURN:
@@ -438,6 +447,7 @@ static InterpretResult run()
                 vm.stackCount = (int) (frame->slots - vm.stack);
                 push(result);
                 frame = &vm.frames[vm.frameCount - 1];
+                ip = frame->ip;
                 break;
             }
         }
