@@ -16,6 +16,7 @@ static void resetStack()
 {
     vm.stackCount = 0; // Runs multiple times.
     vm.frameCount = 0;
+    vm.openUpvalues = NULL;
 }
 
 void initVM()
@@ -52,7 +53,7 @@ static void runtimeError(const char* format, ...)
     for (int i = vm.frameCount - 1; i >= 0; i--)
     {
         CallFrame* frame = &vm.frames[i];
-        ObjFunction* function = frame->function;
+        ObjFunction* function = frame->closure->function;
         // -1 to point to the previous failed instruction.
         size_t offset = frame->ip - function->chunk.code - 1;
         fprintf(stderr, "[line %d] in ", getLine(&function->chunk, offset));
@@ -88,13 +89,13 @@ static Value peek(int distance)
     return vm.stack[vm.stackCount - distance - 1];
 }
 
-static bool call(ObjFunction* function, int argCount)
+static bool call(ObjClosure* closure, int argCount)
 {
-    if (argCount != function->arity)
+    if (argCount != closure->function->arity)
     {
-        if (function->arity != 1)
+        if (closure->function->arity != 1)
             runtimeError("Expected %d arguments but got %d.",
-                function->arity, argCount);
+                closure->function->arity, argCount);
         else
             runtimeError("Expected 1 argument but got %d.", argCount);
         return false;
@@ -107,8 +108,8 @@ static bool call(ObjFunction* function, int argCount)
     }
     
     CallFrame* frame = &vm.frames[vm.frameCount++];
-    frame->function = function;
-    frame->ip = function->chunk.code;
+    frame->closure = closure;
+    frame->ip = closure->function->chunk.code;
     frame->slots = vm.stack + vm.stackCount - argCount - 1;
     return true;
 }
@@ -119,8 +120,8 @@ static bool callValue(Value callee, int argCount)
     {
         switch (OBJ_TYPE(callee))
         {
-            case OBJ_FUNCTION:
-                return call(AS_FUNCTION(callee), argCount);
+            case OBJ_CLOSURE:
+                return call(AS_CLOSURE(callee), argCount);
             case OBJ_NATIVE:
             {
                 ObjNative* func = (ObjNative *) AS_OBJ(callee);
@@ -152,6 +153,45 @@ static bool callValue(Value callee, int argCount)
 
     runtimeError("Can only call functions and classes.");
     return false;
+}
+
+static ObjUpvalue* captureUpvalue(Value* local)
+{
+    ObjUpvalue* prevUpvalue = NULL;
+    ObjUpvalue* upvalue = vm.openUpvalues;
+    while ((upvalue != NULL) && (upvalue->location > local))
+    {
+        prevUpvalue = upvalue;
+        upvalue = upvalue->next;
+    }
+
+    if ((upvalue != NULL) && (upvalue->location = local))
+        return upvalue;
+    
+    ObjUpvalue* createdUpvalue = newUpvalue(local);
+    // upvalue will be to the "left" of (i.e., after) 
+    // our new upvalue.
+    // prevUpvalue will be to the "right" (i.e., before).
+    createdUpvalue->next = upvalue;
+
+    if (prevUpvalue == NULL)
+        vm.openUpvalues = createdUpvalue;
+    else
+        prevUpvalue->next = createdUpvalue;
+
+    return createdUpvalue;
+}
+
+static void closeUpvalues(Value* last)
+{
+    while ((vm.openUpvalues != NULL) && 
+            (vm.openUpvalues->location >= last))
+    {
+        ObjUpvalue* upvalue = vm.openUpvalues;
+        upvalue->closed = *upvalue->location;
+        upvalue->location = &upvalue->closed;
+        vm.openUpvalues = upvalue->next;
+    }
 }
 
 static bool isFalsey(Value value)
@@ -203,9 +243,11 @@ static InterpretResult run()
         (ip += 3, \
             (uint32_t)((ip[-3] << 16) | (ip[-2] << 8) | ip[-1]))
     #define READ_CONSTANT() \
-        (frame->function->chunk.constants.values[READ_BYTE()])
+        (frame->closure->function->chunk.constants.values[READ_BYTE()])
     #define READ_CONST_LONG() \
-        (frame->function->chunk.constants.values[READ_TRIBYTE()])
+        (frame->closure->function->chunk.constants.values[READ_TRIBYTE()])
+    #define READ_VALUE() \
+        (READ_BYTE() == OP_CONSTANT ? READ_CONSTANT() : READ_CONST_LONG())
     #define READ_OPERAND() (READ_BYTE() == OP_LONG ? READ_TRIBYTE() : READ_BYTE())
     #define READ_STRING() AS_STRING(READ_CONSTANT())
     #define READ_STRING_LONG() AS_STRING(READ_CONST_LONG())
@@ -243,12 +285,12 @@ static InterpretResult run()
             printf("\n");
             // Disassemble the next instruction we will execute
             // prior to execution.
-            disassembleInstruction(&frame->function->chunk, 
-                                    (int) (frame->ip - frame->function->chunk.code));
+            disassembleInstruction(&frame->closure->function->chunk, 
+                                    (int) (frame->ip - frame->closure->function->chunk.code));
         #endif
         
-        uint8_t instruction;
-        switch (instruction = READ_BYTE())
+        uint8_t instruction = READ_BYTE();
+        switch (instruction)
         {
             // Handles OP_ZERO and OP_COMPZERO.
             case OP_ZERO:
@@ -316,6 +358,12 @@ static InterpretResult run()
                 push(frame->slots[READ_OPERAND()]);
                 break;
             }
+            case OP_GET_UPVALUE:
+            {
+                READ_BYTE(); // Get rid of OP_SHORT.
+                push(*frame->closure->upvalues[READ_BYTE()]->location);
+                break;
+            }
             case OP_SET_GLOBAL:
             {
                 int index = READ_OPERAND();
@@ -332,6 +380,12 @@ static InterpretResult run()
             case OP_SET_LOCAL:
             {
                 frame->slots[READ_OPERAND()] = peek(0);
+                break;
+            }
+            case OP_SET_UPVALUE:
+            {
+                READ_BYTE(); // Get rid of OP_SHORT.
+                *frame->closure->upvalues[READ_BYTE()]->location = peek(0);
                 break;
             }
             case OP_EQUAL:
@@ -415,14 +469,24 @@ static InterpretResult run()
                 printf("\n");
                 break;
             }
-            case OP_JUMP: ip += READ_SHORT(); break;
+            case OP_JUMP:
+            {
+                uint16_t jump = READ_SHORT();
+                ip += jump;
+                break;
+            }
             case OP_JUMP_IF_FALSE:
             {
                 uint16_t offset = READ_SHORT();
                 if (isFalsey(peek(0))) ip += offset;
                 break;
             }
-            case OP_LOOP: ip -= READ_SHORT(); break;
+            case OP_LOOP:
+            {
+                uint16_t loop = READ_SHORT();
+                ip -= loop;
+                break;
+            }
             case OP_CALL:
             {
                 uint8_t argCount = READ_BYTE();
@@ -433,9 +497,36 @@ static InterpretResult run()
                 ip = frame->ip;
                 break;
             }
+            case OP_CLOSURE:
+            {
+                ObjFunction* function = AS_FUNCTION(READ_VALUE());
+                ObjClosure* closure = newClosure(function);
+                push(OBJ_VAL(closure));
+
+                for (int i = 0; i < closure->upvalueCount; i++)
+                {
+                    uint8_t isLocal = READ_BYTE();
+                    uint8_t index = READ_BYTE();
+                    if (isLocal)
+                        closure->upvalues[i] = captureUpvalue(frame->slots + index);
+                    else
+                        closure->upvalues[i] = frame->closure->upvalues[index];
+                }
+
+                break;
+            }
+            case OP_CLOSE_UPVALUE:
+            {
+                // Close the upvalue at top of stack.
+                closeUpvalues(vm.stack + vm.stackCount - 1);
+                // Pop that stack slot.
+                pop();
+                break;
+            }
             case OP_RETURN:
             {
                 Value result = pop();
+                closeUpvalues(frame->slots);
                 vm.frameCount--;
                 if (vm.frameCount == 0)
                 {
@@ -475,7 +566,11 @@ InterpretResult interpret(const char* source)
     // object.
     // Goes in the dedicated slot 0.
     push(OBJ_VAL(function));
-    call(function, 0);
+    ObjClosure* closure = newClosure(function);
+    // Push then pop in case GC triggered.
+    pop();
+    push(OBJ_VAL(closure));
+    call(closure, 0);
 
     return run();
 }

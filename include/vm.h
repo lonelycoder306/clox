@@ -14,7 +14,7 @@ typedef enum {
 
 // Single ongoing function call.
 typedef struct {
-    ObjFunction* function; // Pointer to callee.
+    ObjClosure* closure; // Pointer to callee's closure.
     uint8_t* ip; // Caller's ip to resume from after return.
     Value* slots; // Pointer to first slot function can use.
 } CallFrame;
@@ -35,6 +35,7 @@ typedef struct {
     Table globalAccess; // Tables of variable-accessibility pairs.
     Table localAccess;
 
+    ObjUpvalue* openUpvalues;
     Obj* objects; // Linked list of (most) allocated objects.
 } VM;
 

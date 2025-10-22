@@ -39,9 +39,27 @@ static void freeObject(Obj* object)
             // GC handles the function object's ObjString name.
             break;
         }
+        // Not needed.
         case OBJ_NATIVE:
         {
             FREE(ObjNative, object);
+            break;
+        }
+        case OBJ_CLOSURE:
+        {
+            ObjClosure* closure = (ObjClosure *) object;
+            FREE_ARRAY(ObjUpvalue*, closure->upvalues, closure->upvalueCount);
+            FREE(ObjClosure, object);
+            // Do not free the function
+            // since closure doesn't own it.
+            break;
+        }
+        case OBJ_UPVALUE:
+        {
+            FREE(ObjUpvalue, object);
+            // Do not free variables since
+            // multiple closures can reference the same
+            // variables.
             break;
         }
     }

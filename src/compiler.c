@@ -44,6 +44,7 @@ typedef struct {
 typedef struct {
     Token name;
     int depth;
+    bool isCaptured;
 } Local;
 
 typedef struct {
@@ -51,6 +52,11 @@ typedef struct {
     int count;
     int capacity;
 } LocalArray;
+
+typedef struct {
+    uint8_t index; // Stack slot of captured variable.
+    bool isLocal;
+} Upvalue;
 
 typedef enum {
     TYPE_FUNCTION,
@@ -63,6 +69,7 @@ typedef struct Compiler {
     FunctionType type;
 
     LocalArray locals;
+    Upvalue upvalues[UINT8_COUNT]; // Fixed size for simplicity.
     int scopeDepth;
 } Compiler;
 
@@ -289,6 +296,7 @@ static void initCompiler(Compiler* compiler, FunctionType type)
     // Slot 0 will hold the function being called.
     Local* local = &current->locals.vars[current->locals.count++];
     local->depth = 0;
+    local->isCaptured = false;
     local->name.start = ""; // Cannot be accessed by user with any identifier.
     local->name.length = 0;
 }
@@ -319,30 +327,34 @@ static void endScope()
 {
     current->scopeDepth--;
     LocalArray* locals = &current->locals;
-    int numPop = 0;
+    // int numPop = 0;
 
     while (locals->count > 0 &&
             locals->vars[locals->count - 1].depth >
                 current->scopeDepth)
     {
-        numPop++;
+        // numPop++;
+        if (locals->vars[locals->count - 1].isCaptured)
+            emitByte(OP_CLOSE_UPVALUE);
+        else
+            emitByte(OP_POP);
         locals->count--;
     }
 
-    if (numPop == 1)
-    {
-        emitByte(OP_POP);
-        return;
-    }
+    // if (numPop == 1)
+    // {
+    //     emitByte(OP_POP);
+    //     return;
+    // }
 
-    emitByte(OP_POPN);
-    if (numPop < 256)
-        emitBytes(OP_SHORT, (uint8_t) numPop);
-    else
-    {
-        emitByte(OP_LONG);
-        splitOperand(numPop);
-    }
+    // emitByte(OP_POPN);
+    // if (numPop < 256)
+    //     emitBytes(OP_SHORT, (uint8_t) numPop);
+    // else
+    // {
+    //     emitByte(OP_LONG);
+    //     splitOperand(numPop);
+    // }
 }
 
 static void parsePrecedence(Precedence precedence)
@@ -443,6 +455,7 @@ static void addLocal(Token name, LocalArray* locals)
     Local* local = &locals->vars[locals->count++];
     local->name = name;
     local->depth = -1;
+    local->isCaptured = false;
 }
 
 static int resolveLocal(LocalArray* locals, Token* name)
@@ -458,6 +471,57 @@ static int resolveLocal(LocalArray* locals, Token* name)
         }
     }
 
+    return -1;
+}
+
+static int addUpvalue(Compiler* compiler, uint8_t index, bool isLocal)
+{
+    int upvalueCount = compiler->function->upvalueCount;
+
+    for (int i = 0; i < upvalueCount; i++)
+    {
+        Upvalue* upvalue = &compiler->upvalues[i];
+        // Variables are only inherited from enclosing functions,
+        // and they will thus all still be on the stack (with
+        // increasing stack indices) when the current function
+        // is defined.
+        if ((upvalue->index == index) && (upvalue->isLocal == isLocal))
+            return i;
+    }
+
+    if (upvalueCount == UINT8_COUNT)
+    {
+        error("Too many closure variables in function.");
+        return 0;
+    }
+
+    compiler->upvalues[upvalueCount].isLocal = isLocal;
+    compiler->upvalues[upvalueCount].index = index;
+    return compiler->function->upvalueCount++;
+}
+
+static int resolveUpvalue(Compiler* compiler, Token* name)
+{
+    // Global scope.
+    if (compiler->enclosing == NULL) return -1;
+
+    // Look for variable in enclosing function.
+    int local = resolveLocal(&compiler->enclosing->locals, name);
+    if (local != -1)
+    {
+        // Mark local variable as captured by closure.
+        compiler->enclosing->locals.vars[local].isCaptured = true;
+        // Found -> capture local as upvalue.
+        return addUpvalue(compiler, (uint8_t) local, true);
+    }
+    
+    // Not in enclosing function -> recurse through functions.
+    int upvalue = resolveUpvalue(compiler->enclosing, name);
+    if (upvalue != -1)
+        // Found -> capture upvalue as upvalue.
+        return addUpvalue(compiler, (uint8_t) upvalue, false);
+    
+    // Not found at all -> assumed global.
     return -1;
 }
 
@@ -537,12 +601,19 @@ static void defineVariable(int global, Access accessType)
 static void namedVariable(Token name, bool canAssign)
 {
     uint8_t getOp, setOp;
-    Table* accessTable;
+    Table* accessTable = NULL; // Dummy initialization.
     int arg = resolveLocal(&current->locals, &name);
     if (arg != -1)
     {
         getOp = OP_GET_LOCAL;
         setOp = OP_SET_LOCAL;
+        accessTable = &vm.localAccess;
+    }
+    // Variable is not in current compiler/function's scope.
+    else if ((arg = resolveUpvalue(current, &name)) != -1)
+    {
+        getOp = OP_GET_UPVALUE;
+        setOp = OP_SET_UPVALUE;
         accessTable = &vm.localAccess;
     }
     else
@@ -556,9 +627,12 @@ static void namedVariable(Token name, bool canAssign)
     if (canAssign && match(TOKEN_EQUAL))
     {
         Value value;
-        if (tableGet(accessTable, NUMBER_VAL((double) arg), &value) &&
-            (int) AS_NUMBER(value) == ACCESS_FIX)
-                error("Fixed variable cannot be reassigned.");
+        if (accessTable != NULL)
+        {
+            if (tableGet(accessTable, NUMBER_VAL((double)arg), &value) &&
+                (int)AS_NUMBER(value) == ACCESS_FIX)
+                    error("Fixed variable cannot be reassigned.");
+        }
         
         expression();
         emitByte(setOp);
@@ -743,7 +817,14 @@ static void function(FunctionType type)
     block();
 
     ObjFunction* function = endCompiler();
+    emitByte(OP_CLOSURE);
     emitConstant(OBJ_VAL(function));
+
+    for (int i = 0; i < function->upvalueCount; i++)
+    {
+        emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
+        emitByte(compiler.upvalues[i].index);
+    }
 }
 
 static void varDeclaration(Access accessType)

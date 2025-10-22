@@ -26,6 +26,8 @@ typedef enum {
     OP_GET_LOCAL, // Opcode | length of operand | position in constant pool.
     OP_SET_GLOBAL, // Opcode | length of operand | position in constant pool.
     OP_SET_LOCAL, // Opcode | length of operand | position in constant pool.
+    OP_GET_UPVALUE, // Opcode | length of operand (1) | position in constant pool.
+    OP_SET_UPVALUE, // Opcode | length of operand (1) | position in constant pool.
     OP_EQUAL,
     OP_GREATER,
     OP_LESS,
@@ -43,6 +45,8 @@ typedef enum {
     OP_JUMP_IF_FALSE, // Opcode | jump offset.
     OP_LOOP, // Opcode | loop start offset.
     OP_CALL, // Opcode | argument number.
+    OP_CLOSURE, // Opcode | position in constant pool.
+    OP_CLOSE_UPVALUE,
     OP_RETURN
 } OpCode;
 
