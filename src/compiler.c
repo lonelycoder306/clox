@@ -630,7 +630,7 @@ static void namedVariable(Token name, bool canAssign)
         if (accessTable != NULL)
         {
             if (tableGet(accessTable, NUMBER_VAL((double)arg), &value) &&
-                (int)AS_NUMBER(value) == ACCESS_FIX)
+                (int) AS_NUMBER(value) == ACCESS_FIX)
                     error("Fixed variable cannot be reassigned.");
         }
         
