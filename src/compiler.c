@@ -602,6 +602,7 @@ static void namedVariable(Token name, bool canAssign)
 {
     uint8_t getOp, setOp;
     Table* accessTable = NULL; // Dummy initialization.
+    bool isUpvalue = false;
     int arg = resolveLocal(&current->locals, &name);
     if (arg != -1)
     {
@@ -614,6 +615,7 @@ static void namedVariable(Token name, bool canAssign)
     {
         getOp = OP_GET_UPVALUE;
         setOp = OP_SET_UPVALUE;
+        isUpvalue = true;
         accessTable = &vm.localAccess;
     }
     else
@@ -629,7 +631,9 @@ static void namedVariable(Token name, bool canAssign)
         Value value;
         if (accessTable != NULL)
         {
-            if (tableGet(accessTable, NUMBER_VAL((double)arg), &value) &&
+           int index = isUpvalue ? current->upvalues[arg].index : arg;
+           
+            if (tableGet(accessTable, NUMBER_VAL((double) index), &value) &&
                 (int) AS_NUMBER(value) == ACCESS_FIX)
                     error("Fixed variable cannot be reassigned.");
         }
