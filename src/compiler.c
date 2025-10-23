@@ -925,13 +925,24 @@ static void forStatement()
 {   
     int surroundBreakJump = breakJump;
     int surroundContinueJump = continueJump;
+
+    // Grab the name and slot of the loop variable
+    // so we can refer to it later.
+    int loopVariable = -1;
+    Token loopVariableName;
+    loopVariableName.start = NULL;
     
     beginScope();
     loopDepth++;
     consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
     if (match(TOKEN_SEMICOLON)) {}
     else if (match(TOKEN_VAR))
+    {
+        // Grab the name of the loop variable.
+        loopVariableName = parser.current;
         varDeclaration(ACCESS_VAR);
+        loopVariable = current->locals.count - 1;
+    }
     else
         expressionStatement();
     
@@ -960,7 +971,57 @@ static void forStatement()
         patchJump(bodyJump);
     }
 
+    int innerVariable = -1;
+    // If the loop declares a variable.
+    if (loopVariable != -1)
+    {
+        // Create a scope for the copy.
+        beginScope();
+        // Define a new variable initialized with the
+        // current value of the loop variable.
+        emitByte(OP_GET_LOCAL);
+        if (loopVariable < 255)
+            emitBytes(OP_SHORT, (uint8_t)  loopVariable);
+        else
+        {
+            emitByte(OP_LONG);
+            splitOperand(loopVariable);
+        }
+        addLocal(loopVariableName, &current->locals);
+        markInitialized(ACCESS_VAR);
+        // Keep track of its slot.
+        innerVariable = current->locals.count - 1;
+    }
+
     statement();
+
+    if (loopVariable != -1)
+    {
+        // Store the inner variable back in the loop
+        // variable.
+        emitByte(OP_GET_LOCAL);
+        if (innerVariable > 255)
+            emitBytes(OP_SHORT, (uint8_t) innerVariable);
+        else
+        {
+            emitByte(OP_LONG);
+            splitOperand(innerVariable);
+        }
+
+        emitByte(OP_SET_LOCAL);
+        if (loopVariable > 255)
+            emitBytes(OP_SHORT, (uint8_t) loopVariable);
+        else
+        {
+            emitByte(OP_LONG);
+            splitOperand(loopVariable);
+        }
+        emitByte(OP_POP);
+
+        // Close the temporary scope for the 
+        // copy of the loop variable.
+        endScope();
+    }
 
     if (continueJump != -1)
         patchJump(continueJump);
