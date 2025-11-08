@@ -990,9 +990,6 @@ static void forStatement()
 
     statement();
 
-    if (continueJump != -1)
-        patchJump(continueJump);
-
     if (loopVariable != -1)
     {
         // Store the inner variable back in the loop
@@ -1008,6 +1005,9 @@ static void forStatement()
         // copy of the loop variable.
         endScope();
     }
+
+    if (continueJump != -1)
+        patchJump(continueJump);
 
     emitLoop(loopStart);
 
