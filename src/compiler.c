@@ -259,6 +259,17 @@ static void splitOperand(int index)
     emitByte((uint8_t) (index & 0xff));
 }
 
+static void emitOperand(int operand)
+{
+    if (operand < 256)
+        emitBytes(OP_SHORT, (uint8_t) operand);
+    else
+    {
+        emitByte(OP_LONG);
+        splitOperand(operand);
+    }
+}
+
 static void initLocalArray(LocalArray* locals)
 {
     locals->count = 0;
@@ -585,13 +596,7 @@ static void defineVariable(int global, Access accessType)
     // global is the index of the variable's
     // value in vm.globalValues.
     emitByte(OP_DEFINE_GLOBAL);
-    if (global > 255)
-    {
-        emitByte(OP_LONG);
-        splitOperand(global);
-    }
-    else
-        emitBytes(OP_SHORT, (uint8_t) global);
+    emitOperand(global);
     
     tableSet(&vm.globalAccess, NUMBER_VAL((double) global), 
                                 NUMBER_VAL((double) accessType));
@@ -603,6 +608,7 @@ static void namedVariable(Token name, bool canAssign)
     uint8_t getOp, setOp;
     Table* accessTable = NULL; // Dummy initialization.
     bool isUpvalue = false;
+
     int arg = resolveLocal(&current->locals, &name);
     if (arg != -1)
     {
@@ -644,13 +650,7 @@ static void namedVariable(Token name, bool canAssign)
     else
         emitByte(getOp);
     
-    if (arg > 255)
-    {
-        emitByte(OP_LONG);
-        splitOperand(arg);
-    }
-    else
-        emitBytes(OP_SHORT, (uint8_t) arg);
+    emitOperand(arg);
 }
 
 static uint8_t argumentList()
@@ -941,6 +941,7 @@ static void forStatement()
         // Grab the name of the loop variable.
         loopVariableName = parser.current;
         varDeclaration(ACCESS_VAR);
+        // Grab its slot as well.
         loopVariable = current->locals.count - 1;
     }
     else
@@ -980,13 +981,7 @@ static void forStatement()
         // Define a new variable initialized with the
         // current value of the loop variable.
         emitByte(OP_GET_LOCAL);
-        if (loopVariable < 255)
-            emitBytes(OP_SHORT, (uint8_t)  loopVariable);
-        else
-        {
-            emitByte(OP_LONG);
-            splitOperand(loopVariable);
-        }
+        emitOperand(loopVariable);
         addLocal(loopVariableName, &current->locals);
         markInitialized(ACCESS_VAR);
         // Keep track of its slot.
@@ -995,27 +990,18 @@ static void forStatement()
 
     statement();
 
+    if (continueJump != -1)
+        patchJump(continueJump);
+
     if (loopVariable != -1)
     {
         // Store the inner variable back in the loop
         // variable.
         emitByte(OP_GET_LOCAL);
-        if (innerVariable > 255)
-            emitBytes(OP_SHORT, (uint8_t) innerVariable);
-        else
-        {
-            emitByte(OP_LONG);
-            splitOperand(innerVariable);
-        }
+        emitOperand(innerVariable);
 
         emitByte(OP_SET_LOCAL);
-        if (loopVariable > 255)
-            emitBytes(OP_SHORT, (uint8_t) loopVariable);
-        else
-        {
-            emitByte(OP_LONG);
-            splitOperand(loopVariable);
-        }
+        emitOperand(loopVariable);
         emitByte(OP_POP);
 
         // Close the temporary scope for the 
@@ -1023,10 +1009,11 @@ static void forStatement()
         endScope();
     }
 
-    if (continueJump != -1)
-        patchJump(continueJump);
-
     emitLoop(loopStart);
+
+    if (breakJump != -1)
+        patchJump(breakJump);
+
     if (exitJump != -1)
     {
         patchJump(exitJump);
@@ -1034,9 +1021,6 @@ static void forStatement()
         // in the first place.
         emitByte(OP_POP);
     }
-
-    if (breakJump != -1)
-        patchJump(breakJump);
 
     loopDepth--;
     endScope();
