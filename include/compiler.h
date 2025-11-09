@@ -7,5 +7,6 @@
 // Returns true if compilation succeeded;
 // false otherwise.
 ObjFunction* compile(const char* source);
+void markCompilerRoots();
 
 #endif

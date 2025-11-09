@@ -1,5 +1,6 @@
 #include "../include/chunk.h"
 #include "../include/memory.h"
+#include "../include/vm.h"
 #include <stdlib.h>
 
 static void initLines(LineArray* array)
@@ -86,7 +87,9 @@ void writeChunk(Chunk* chunk, uint8_t byte, int line)
 
 int addConstant(Chunk* chunk, Value value)
 {
+    push(value); // Push onto stack temporarily so GC can reach it.
     writeValueArray(&chunk->constants, value);
+    pop();
     return chunk->constants.count - 1;
 }
 

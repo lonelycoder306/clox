@@ -1,6 +1,7 @@
 #ifndef clox_vm_h
 #define clox_vm_h
 
+#include "common.h"
 #include "object.h"
 #include "table.h"
 #include "value.h"
@@ -36,7 +37,15 @@ typedef struct {
     Table localAccess;
 
     ObjUpvalue* openUpvalues;
+
+    size_t bytesAllocated; // Number of bytes VM has allocated.
+    size_t nextGC; // Threshold for next collection.
     Obj* objects; // Linked list of (most) allocated objects.
+
+    // For GC tri-color traversal.
+    int grayCount;
+    int grayCapacity;
+    Obj** grayStack;
 } VM;
 
 extern VM vm;

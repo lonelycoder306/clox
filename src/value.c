@@ -31,6 +31,12 @@ void freeValueArray(ValueArray* array)
     initValueArray(array);
 }
 
+void markValueArray(ValueArray* array)
+{
+    for (int i = 0; i < array->count; i++)
+        markValue(array->values[i]);
+}
+
 static uint32_t hashDouble(double value)
 {
     union BitCast {

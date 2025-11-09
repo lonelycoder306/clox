@@ -15,8 +15,15 @@ static Obj* allocateObject(size_t size, ObjType type)
 {
     Obj* object = (Obj*) reallocate(NULL, 0, size);
     object->type = type;
+    object->isMarked = false;
     object->next = vm.objects;
     vm.objects = object;
+
+    #ifdef DEBUG_LOG_GC
+    printf("%p allocate %ld for %s\n", (void *) object, size, 
+                objTypes[(int) type]);
+    #endif
+
     return object;
 }
 
@@ -73,7 +80,6 @@ ObjString* makeString(int length)
 {
     ObjString* string = (ObjString *) allocateObject(
             sizeof(ObjString) + length + 1, OBJ_STRING);
-    tableSet(&vm.strings, OBJ_VAL(string), NIL_VAL);
     string->length = length;
     return string;
 }
@@ -93,7 +99,10 @@ ObjString* copyString(const char* chars, int length)
     string->chars[length] = '\0';
     string->hash = hash;
 
+    // Push onto stack temporarily so GC can reach it.
+    push(OBJ_VAL(string));
     tableSet(&vm.strings, OBJ_VAL(string), NIL_VAL);
+    pop();
 
     return string;
 }

@@ -25,10 +25,21 @@ void initVM()
     vm.stack = NULL;
     vm.stackCapacity = 0;
     resetStack();
+
     vm.objects = NULL;
+    vm.bytesAllocated = 0;
+    vm.nextGC = 1024 * 1024;
+
+    vm.grayCount = 0;
+    vm.grayCapacity = 0;
+    vm.grayStack = NULL;
+
     initTable(&vm.strings);
     initTable(&vm.globalNames);
     initValueArray(&vm.globalValues);
+
+    initTable(&vm.globalAccess);
+    initTable(&vm.localAccess);
 }
 
 void freeVM()
@@ -36,6 +47,10 @@ void freeVM()
     freeTable(&vm.globalNames);
     freeValueArray(&vm.globalValues);
     freeTable(&vm.strings);
+
+    freeTable(&vm.globalAccess);
+    freeTable(&vm.localAccess);
+
     freeObjects();
     FREE_ARRAY(Value, vm.stack, vm.stackCapacity);
 }
@@ -201,8 +216,8 @@ static bool isFalsey(Value value)
 
 static void concatenate()
 {
-    ObjString* b = AS_STRING(pop());
-    ObjString* a = AS_STRING(pop());
+    ObjString* b = AS_STRING(peek(0));
+    ObjString* a = AS_STRING(peek(1));
 
     int length = a->length + b->length;
     ObjString* result = makeString(length + 1);
@@ -223,6 +238,8 @@ static void concatenate()
     result->chars[length] = '\0';
     result->hash = hashString(result->chars, result->length);
 
+    pop();
+    pop();
     push(OBJ_VAL(result));
 }
 
@@ -272,21 +289,23 @@ static InterpretResult run()
     while (true)
     {
         #ifdef DEBUG_TRACE_EXECUTION
-            printf("          ");
-            // Our stack is empty before the first instruction executes.
-            // So this only starts printing after (at least) the first
-            // instruction is disassembled.
-            for (Value* slot = vm.stack; slot - vm.stack < vm.stackCount; slot++)
-            {
-                printf("[ ");
-                printValue(*slot);
-                printf(" ]");
-            }
-            printf("\n");
+            #ifdef DEBUG_TRACE_STACK
+                printf("          ");
+                // Our stack is empty before the first instruction executes.
+                // So this only starts printing after (at least) the first
+                // instruction is disassembled.
+                for (Value* slot = vm.stack; slot - vm.stack < vm.stackCount; slot++)
+                {
+                    printf("[ ");
+                    printValue(*slot);
+                    printf(" ]");
+                }
+                printf("\n");
+            #endif
             // Disassemble the next instruction we will execute
             // prior to execution.
             disassembleInstruction(&frame->closure->function->chunk, 
-                                    (int) (frame->ip - frame->closure->function->chunk.code));
+                                    (int) (ip - frame->closure->function->chunk.code));
         #endif
         
         uint8_t instruction = READ_BYTE();
@@ -401,6 +420,7 @@ static InterpretResult run()
             {
                 if (!IS_NUMBER(peek(0)))
                 {
+                    frame->ip = ip;
                     runtimeError("Operand must be a number.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
@@ -411,6 +431,7 @@ static InterpretResult run()
             {
                 if (!IS_NUMBER(peek(0)))
                 {
+                    frame->ip = ip;
                     runtimeError("Operand must be a number.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
@@ -441,6 +462,7 @@ static InterpretResult run()
             {
                 if (IS_NUMBER(peek(0)) && AS_NUMBER(peek(0)) == 0)
                 {
+                    frame->ip = ip;
                     runtimeError("Cannot divide by zero.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
@@ -549,6 +571,7 @@ static InterpretResult run()
     #undef READ_TRIBYTE
     #undef READ_CONSTANT
     #undef READ_CONST_LONG
+    #undef READ_VALUE
     #undef READ_OPERAND
     #undef READ_STRING
     #undef READ_STRING_LONG
