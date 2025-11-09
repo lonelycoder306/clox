@@ -104,6 +104,14 @@ static bool typeNative(int argCount, Value* args)
                 case OBJ_NATIVE:
                     typeName = copyString("<builtin function>", 18);
                     break;
+                case OBJ_CLOSURE:
+                    typeName = copyString("<closure>", 9);
+                    break;
+                case OBJ_UPVALUE:
+                    // Temporarily.
+                    // We should check the upvalue's specific type.
+                    typeName = copyString("<upvalue>", 9);
+                    break;
             }
             break;
         }
