@@ -1,41 +1,57 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include "../include/natives.h"
 #include "../include/value.h"
 #include "../include/vm.h"
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 #include <time.h>
 
-static ObjNative natives[4];
-static const int nativesCount = 4;
+static ObjNative natives[7];
+static const int nativesCount = 7;
 
 static bool clockNative(int argCount, Value* args);
 static bool sqrtNative(int argCount, Value* args);
 static bool typeNative(int argCount, Value* args);
 static bool lengthNative(int argCount, Value* args);
+static bool hasFieldNative(int argCount, Value* args);
+static bool getFieldNative(int argCount, Value* args);
+static bool setFieldNative(int argCount, Value* args);
 
 // Directly initializing each struct with {...}
 // didn't work for some reason.
 static void fillNatives()
 {
-    natives[0].obj.type = OBJ_NATIVE;
+    for (int i = 0; i < nativesCount; i++)
+        natives[i].obj.type = OBJ_NATIVE;
+    
     natives[0].name = "clock";
     natives[0].function = clockNative;
     natives[0].arity = 0;
 
-    natives[1].obj.type = OBJ_NATIVE;
     natives[1].name = "sqrt";
     natives[1].function = sqrtNative;
     natives[1].arity = 1;
 
-    natives[2].obj.type = OBJ_NATIVE;
     natives[2].name = "type";
     natives[2].function = typeNative;
     natives[2].arity = 1;
 
-    natives[3].obj.type = OBJ_NATIVE;
     natives[3].name = "length";
     natives[3].function = lengthNative;
     natives[3].arity = 1;
+
+    natives[4].name = "hasField";
+    natives[4].function = hasFieldNative;
+    natives[4].arity = 2;
+
+    natives[5].name = "getField";
+    natives[5].function = getFieldNative;
+    natives[5].arity = 2;
+
+    natives[6].name = "setField";
+    natives[6].function = setFieldNative;
+    natives[6].arity = 3;
 }
 
 static void defineNative(ObjNative* nativeFunc)
@@ -139,5 +155,77 @@ static bool lengthNative(int argCount, Value* args)
     }
 
     args[-1] = NUMBER_VAL((double) strlen(AS_CSTRING(args[0])));
+    return true;
+}
+
+static bool hasFieldNative(int argCount, Value* args)
+{   
+    if (!IS_INSTANCE(args[0]))
+    {
+        ObjString* message = copyString("First argument must be an instance.", 35);
+        args[-1] = OBJ_VAL(message);
+        return false;
+    }
+    if (!IS_STRING(args[1]))
+    {
+        ObjString* message = copyString("Second argument must be a field name.", 35);
+        args[-1] = OBJ_VAL(message);
+        return false;
+    }
+    
+    ObjInstance* instance = AS_INSTANCE(args[0]);
+    Value dummy;
+    args[-1] = BOOL_VAL(tableGet(&instance->fields, args[1], &dummy));
+    return true;
+}
+
+static bool getFieldNative(int argCount, Value* args)
+{    
+    if (!IS_INSTANCE(args[0]))
+    {
+        ObjString* message = copyString("First argument must be an instance.", 35);
+        args[-1] = OBJ_VAL(message);
+        return false;
+    }
+    if (!IS_STRING(args[1]))
+    {
+        ObjString* message = copyString("Second argument must evaluate to a field name.", 35);
+        args[-1] = OBJ_VAL(message);
+        return false;
+    }
+
+    ObjInstance* instance = AS_INSTANCE(args[0]);
+    Value returnVal;
+    if (tableGet(&instance->fields, args[1], &returnVal))
+    {
+        args[-1] = returnVal;
+        return true;
+    }
+    else
+    {
+        char message[256];
+        sprintf(message, "Undefined property '%s'.", AS_CSTRING(args[1]));
+        args[-1] = OBJ_VAL(copyString(message, strlen(message)));
+        return false;
+    }
+}
+
+static bool setFieldNative(int argCount, Value* args)
+{
+    if (!IS_INSTANCE(args[0]))
+    {
+        ObjString* message = copyString("First argument must be an instance.", 35);
+        args[-1] = OBJ_VAL(message);
+        return false;
+    }
+    if (!IS_STRING(args[1]))
+    {
+        ObjString* message = copyString("Second argument must evaluate to a field name.", 35);
+        args[-1] = OBJ_VAL(message);
+        return false;
+    }
+
+    ObjInstance* instance = AS_INSTANCE(args[0]);
+    tableSet(&instance->fields, args[1], args[2]);
     return true;
 }
