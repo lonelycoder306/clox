@@ -614,7 +614,6 @@ static InterpretResult run()
 
                 if (!tableDelete(&instance->fields, OBJ_VAL(name)))
                 {
-                    printf("Field class: %s\n", instance->klass->name->chars);
                     runtimeError("Failed to delete field '%s'.", name->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
