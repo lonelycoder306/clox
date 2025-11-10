@@ -230,7 +230,9 @@ int disassembleInstruction(Chunk* chunk, int offset)
         case OP_GET_PROPERTY:
             return valueInstruction("OP_GET_PROPERTY", chunk, offset);
         case OP_SET_PROPERTY:
-            return valueInstruction("OP_GET_PROPERTY", chunk, offset);
+            return valueInstruction("OP_SET_PROPERTY", chunk, offset);
+        case OP_DEL_PROPERTY:
+            return valueInstruction("OP_DEL_PROPERTY", chunk, offset);
         case OP_RETURN:
             return simpleInstruction("OP_RETURN", offset);
         default:

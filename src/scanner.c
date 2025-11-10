@@ -137,6 +137,7 @@ static TokenType identifierType()
                 }
             }
         }
+        case 'd': return checkKeyword(1, 2, "el", TOKEN_DEL);
         case 'e': return checkKeyword(1, 3, "lse", TOKEN_ELSE);
         case 'f':
             if (scanner.current - scanner.start > 1)

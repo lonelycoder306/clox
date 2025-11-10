@@ -601,6 +601,24 @@ static InterpretResult run()
                 push(value); // Push stored value back on top.
                 break;
             }
+            case OP_DEL_PROPERTY:
+            {
+                if (!IS_INSTANCE(peek(0)))
+                {
+                    runtimeError("Only instances have properties.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                ObjInstance* instance = AS_INSTANCE(peek(0));
+                ObjString* name = READ_STRING_VALUE();
+
+                if (!tableDelete(&instance->fields, OBJ_VAL(name)))
+                {
+                    printf("Field class: %s\n", instance->klass->name->chars);
+                    runtimeError("Failed to delete field '%s'.", name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+            }
             case OP_RETURN:
             {
                 Value result = pop();

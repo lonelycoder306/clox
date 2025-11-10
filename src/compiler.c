@@ -1142,6 +1142,27 @@ static void continueStatement()
     continueJump = emitJump(OP_JUMP);
 }
 
+static void delStatement()
+{
+    parsePrecedence(PREC_PRIMARY);
+
+    while (match(TOKEN_DOT))
+    {
+        consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
+
+        if (!check(TOKEN_DOT))
+            emitByte(OP_DEL_PROPERTY);
+        else
+            emitByte(OP_GET_PROPERTY);
+
+        const char* name = parser.previous.start;
+        int length = parser.previous.length;
+        emitConstant(OBJ_VAL(copyString(name, length)));
+    }
+
+    consume(TOKEN_SEMICOLON, "Expect ';' after 'del' command.");
+}
+
 static void returnStatement()
 {
     if (current->type == TYPE_SCRIPT)
@@ -1173,6 +1194,8 @@ static void statement()
         breakStatement();
     else if (match(TOKEN_CONTINUE))
         continueStatement();
+    else if (match(TOKEN_DEL))
+        delStatement();
     else if (match(TOKEN_RETURN))
         returnStatement();
     else if (match(TOKEN_LEFT_BRACE))
