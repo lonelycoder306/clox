@@ -161,6 +161,13 @@ static bool callValue(Value callee, int argCount)
                 vm.stackCount -= argCount;
                 return true;
             }
+            case OBJ_CLASS:
+            {
+                ObjClass* klass = AS_CLASS(callee);
+                vm.stack[vm.stackCount - argCount - 1] = 
+                                    OBJ_VAL(newInstance(klass));
+                return true;
+            }
             default:
                 break; // Non-callable object type.
         }
@@ -259,15 +266,21 @@ static InterpretResult run()
     #define READ_TRIBYTE() \
         (ip += 3, \
             (uint32_t)((ip[-3] << 16) | (ip[-2] << 8) | ip[-1]))
+    #define READ_OPERAND() (READ_BYTE() == OP_LONG ? READ_TRIBYTE() : READ_BYTE())
+
     #define READ_CONSTANT() \
         (frame->closure->function->chunk.constants.values[READ_BYTE()])
     #define READ_CONST_LONG() \
         (frame->closure->function->chunk.constants.values[READ_TRIBYTE()])
     #define READ_VALUE() \
         (READ_BYTE() == OP_CONSTANT ? READ_CONSTANT() : READ_CONST_LONG())
-    #define READ_OPERAND() (READ_BYTE() == OP_LONG ? READ_TRIBYTE() : READ_BYTE())
+    #define READ_CONST_OPER() (READ_BYTE() == OP_LONG ? READ_CONSTANT() : READ_CONST_LONG())
+
     #define READ_STRING() AS_STRING(READ_CONSTANT())
     #define READ_STRING_LONG() AS_STRING(READ_CONST_LONG())
+    #define READ_STRING_OPER() AS_STRING(READ_CONST_OPER())
+    #define READ_STRING_VALUE() AS_STRING(READ_VALUE())
+
     #define BINARY_OP(valueType, op) \
             do \
             { \
@@ -545,6 +558,49 @@ static InterpretResult run()
                 pop();
                 break;
             }
+            case OP_CLASS:
+            {
+                ObjString* name = READ_STRING_VALUE();
+                push(OBJ_VAL(newClass(name)));
+                break;
+            }
+            case OP_GET_PROPERTY:
+            {
+                if (!IS_INSTANCE(peek(0)))
+                {
+                    runtimeError("Only instances have properties.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                ObjInstance* instance = AS_INSTANCE(peek(0));
+                ObjString* name = READ_STRING_VALUE();
+
+                Value value;
+                if (tableGet(&instance->fields, OBJ_VAL(name), &value))
+                {
+                    pop(); // Instance;
+                    push(value);
+                    break;
+                }
+                
+                runtimeError("Undefined property '%s'.", name->chars);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            case OP_SET_PROPERTY:
+            {
+                if (!IS_INSTANCE(peek(1)))
+                {
+                    runtimeError("Only instances have fields.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                ObjInstance* instance = AS_INSTANCE(peek(1));
+                tableSet(&instance->fields, OBJ_VAL(READ_STRING_VALUE()), peek(0));
+                Value value = pop(); // Pop stored value.
+                pop(); // Pop instance.
+                push(value); // Push stored value back on top.
+                break;
+            }
             case OP_RETURN:
             {
                 Value result = pop();
@@ -573,8 +629,10 @@ static InterpretResult run()
     #undef READ_CONST_LONG
     #undef READ_VALUE
     #undef READ_OPERAND
+    #undef READ_CONST_OPER
     #undef READ_STRING
     #undef READ_STRING_LONG
+    #undef READ_STRING_OPER
     #undef BINARY_OP
 }
 

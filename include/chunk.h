@@ -47,6 +47,9 @@ typedef enum {
     OP_CALL, // Opcode | argument number.
     OP_CLOSURE, // Opcode | position in constant pool.
     OP_CLOSE_UPVALUE,
+    OP_CLASS, // Opcode | position in constant pool.
+    OP_GET_PROPERTY, // Opcode | length of operand (1) | position in constant pool.
+    OP_SET_PROPERTY, // Opcode | length of operand (1) | position in constant pool.
     OP_RETURN
 } OpCode;
 

@@ -41,7 +41,8 @@ static void fillNatives()
 static void defineNative(ObjNative* nativeFunc)
 {
     int index = vm.globalValues.count;
-    ObjString* identifier = copyString(nativeFunc->name, (int) strlen(nativeFunc->name));
+    ObjString* identifier = copyString(nativeFunc->name, 
+                                    (int) strlen(nativeFunc->name));
     writeValueArray(&vm.globalValues, OBJ_VAL(nativeFunc));
     tableSet(&vm.globalNames, OBJ_VAL(identifier), NUMBER_VAL((double)index));
 }
@@ -104,14 +105,19 @@ static bool typeNative(int argCount, Value* args)
                 case OBJ_NATIVE:
                     typeName = copyString("<builtin function>", 18);
                     break;
-                case OBJ_CLOSURE:
-                    typeName = copyString("<closure>", 9);
-                    break;
                 case OBJ_UPVALUE:
                     // Temporarily.
                     // We should check the upvalue's specific type.
                     typeName = copyString("<upvalue>", 9);
                     break;
+                case OBJ_CLOSURE:
+                    typeName = copyString("<closure>", 9);
+                    break;
+                case OBJ_CLASS:
+                    typeName = copyString("<class>", 7);
+                    break;
+                case OBJ_INSTANCE:
+                    typeName = copyString("<class instance>", 16);
             }
             break;
         }

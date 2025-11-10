@@ -45,6 +45,14 @@ static int byteInstruction(const char* name, Chunk* chunk, int offset)
     return offset + 2;
 }
 
+static int valueInstruction(const char* name, Chunk* chunk, int offset)
+{
+    if (chunk->code[++offset] == OP_CONSTANT)
+        return constantInstruction(name, chunk, offset);
+    else
+        return constLongInstruction(name, chunk, offset);
+}
+
 // For generic instructions with variable-size operands.
 static int operInstruction(const char* name, Chunk* chunk, int offset)
 {
@@ -137,7 +145,7 @@ int disassembleInstruction(Chunk* chunk, int offset)
         case OP_POPN:
             return operInstruction("OP_POPN", chunk, offset);
         case OP_DEFINE_GLOBAL:
-            return varInstruction("OP_DEFINE_GLOBAL", chunk, offset);
+            return varInstruction("OP_DEFINE_GLOBAL", chunk, offset); 
         case OP_GET_GLOBAL:
             return varInstruction("OP_GET_GLOBAL", chunk, offset);
         case OP_GET_LOCAL:
@@ -217,6 +225,12 @@ int disassembleInstruction(Chunk* chunk, int offset)
         }
         case OP_CLOSE_UPVALUE:
             return simpleInstruction("OP_CLOSE_UPVALUE", offset);
+        case OP_CLASS:
+            return valueInstruction("OP_CLASS", chunk, offset);
+        case OP_GET_PROPERTY:
+            return valueInstruction("OP_GET_PROPERTY", chunk, offset);
+        case OP_SET_PROPERTY:
+            return valueInstruction("OP_GET_PROPERTY", chunk, offset);
         case OP_RETURN:
             return simpleInstruction("OP_RETURN", offset);
         default:

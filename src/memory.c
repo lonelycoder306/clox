@@ -99,6 +99,19 @@ static void blackenObject(Obj* object)
                 markObject((Obj *) closure->upvalues[i]);
             break;
         }
+        case OBJ_CLASS:
+        {
+            ObjClass* klass = (ObjClass *) object;
+            markObject((Obj *) klass->name);
+            break;
+        }
+        case OBJ_INSTANCE:
+        {
+            ObjInstance* instance = (ObjInstance *) object;
+            markObject((Obj *) instance->klass);
+            markTable(&instance->fields);
+            break;
+        }
     }
 }
 
@@ -134,6 +147,14 @@ static void freeObject(Obj* object)
             FREE(ObjNative, object);
             break;
         }
+        case OBJ_UPVALUE:
+        {
+            FREE(ObjUpvalue, object);
+            // Do not free variables since
+            // multiple closures can reference the same
+            // variables.
+            break;
+        }
         case OBJ_CLOSURE:
         {
             ObjClosure* closure = (ObjClosure *) object;
@@ -143,12 +164,19 @@ static void freeObject(Obj* object)
             // since closure doesn't own it.
             break;
         }
-        case OBJ_UPVALUE:
+        case OBJ_CLASS:
         {
-            FREE(ObjUpvalue, object);
-            // Do not free variables since
-            // multiple closures can reference the same
-            // variables.
+            FREE(ObjClass, object);
+            break;
+        }
+        case OBJ_INSTANCE:
+        {
+            ObjInstance* instance = (ObjInstance *) object;
+            // Each instance owns its field table.
+            // Don't free references in table.
+            // Only the entry array.
+            freeTable(&instance->fields);
+            FREE(ObjInstance, object);
             break;
         }
     }
