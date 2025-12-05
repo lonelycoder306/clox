@@ -45,9 +45,11 @@ typedef enum {
     OP_JUMP_IF_FALSE, // Opcode | jump offset.
     OP_LOOP, // Opcode | loop start offset.
     OP_CALL, // Opcode | argument number.
+    OP_INVOKE, // Opcode | name of method | number of arguments.
     OP_CLOSURE, // Opcode | position in constant pool.
     OP_CLOSE_UPVALUE,
     OP_CLASS, // Opcode | position in constant pool.
+    OP_METHOD,
     OP_GET_PROPERTY, // Opcode | length of operand (1) | position in constant pool.
     OP_SET_PROPERTY, // Opcode | length of operand (1) | position in constant pool.
     OP_DEL_PROPERTY, // Opcode | length of operand (1) | position in constant pool.

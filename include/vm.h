@@ -29,6 +29,7 @@ typedef struct {
     int stackCapacity;
 
     Table strings; // To hold our interned strings.
+    ObjString* initString;
 
     Table globalNames; // Table of name-(value index) pairs of global variables.
     ValueArray globalValues; // To hold values of global variables.

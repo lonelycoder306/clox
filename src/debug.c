@@ -107,6 +107,25 @@ static int jumpInstruction(const char* name, int sign, Chunk* chunk,
     return offset + 3;
 }
 
+static int invokeInstruction(const char* name, Chunk* chunk, int offset)
+{
+    int index;
+    if (chunk->code[++offset] == OP_CONSTANT)
+        index = chunk->code[++offset];
+    else
+    {
+        index = ((chunk->code[offset + 2] << 16) |
+            (chunk->code[offset + 3] << 8) |
+            (chunk->code[offset + 4]));
+        offset += 4;
+    }
+    uint8_t argCount = chunk->code[++offset];
+    printf("%-20s (%d args) %4d '", name, argCount, index);
+    printValue(chunk->constants.values[index]);
+    printf("'\n");
+    return ++offset;
+}
+
 int disassembleInstruction(Chunk* chunk, int offset)
 {
     printf("%04d ", offset);
@@ -192,6 +211,8 @@ int disassembleInstruction(Chunk* chunk, int offset)
             return jumpInstruction("OP_LOOP", -1, chunk, offset);
         case OP_CALL:
             return byteInstruction("OP_CALL", chunk, offset);
+        case OP_INVOKE:
+            return invokeInstruction("OP_INVOKE", chunk, offset);
         case OP_CLOSURE:
         {
             int index;
@@ -227,6 +248,8 @@ int disassembleInstruction(Chunk* chunk, int offset)
             return simpleInstruction("OP_CLOSE_UPVALUE", offset);
         case OP_CLASS:
             return valueInstruction("OP_CLASS", chunk, offset);
+        case OP_METHOD:
+            return valueInstruction("OP_METHOD", chunk, offset);
         case OP_GET_PROPERTY:
             return valueInstruction("OP_GET_PROPERTY", chunk, offset);
         case OP_SET_PROPERTY:

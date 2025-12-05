@@ -103,6 +103,7 @@ static void blackenObject(Obj* object)
         {
             ObjClass* klass = (ObjClass *) object;
             markObject((Obj *) klass->name);
+            markTable(&klass->methods);
             break;
         }
         case OBJ_INSTANCE:
@@ -110,6 +111,13 @@ static void blackenObject(Obj* object)
             ObjInstance* instance = (ObjInstance *) object;
             markObject((Obj *) instance->klass);
             markTable(&instance->fields);
+            break;
+        }
+        case OBJ_BOUND_METHOD:
+        {
+            ObjBoundMethod* bound = (ObjBoundMethod *) object;
+            markValue(bound->receiver);
+            markObject((Obj *) bound->method);
             break;
         }
     }
@@ -166,6 +174,9 @@ static void freeObject(Obj* object)
         }
         case OBJ_CLASS:
         {
+            ObjClass* klass = (ObjClass *) object;
+            // Each class object owns its method table.
+            freeTable(&klass->methods);
             FREE(ObjClass, object);
             break;
         }
@@ -177,6 +188,11 @@ static void freeObject(Obj* object)
             // Only the entry array.
             freeTable(&instance->fields);
             FREE(ObjInstance, object);
+            break;
+        }
+        case OBJ_BOUND_METHOD:
+        {
+            FREE(ObjBoundMethod, object);
             break;
         }
     }
@@ -199,6 +215,7 @@ static void markRoots()
     markTable(&vm.globalNames);
     markValueArray(&vm.globalValues);
     markCompilerRoots();
+    markObject((Obj *) vm.initString);
 }
 
 static void traceReferences()

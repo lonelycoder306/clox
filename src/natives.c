@@ -134,6 +134,10 @@ static bool typeNative(int argCount, Value* args)
                     break;
                 case OBJ_INSTANCE:
                     typeName = copyString("<class instance>", 16);
+                    break;
+                case OBJ_BOUND_METHOD:
+                    typeName = copyString("<bound method>", 14);
+                    break;
             }
             break;
         }

@@ -14,14 +14,13 @@ VM vm;
 
 static void resetStack()
 {
-    vm.stackCount = 0; // Runs multiple times.
+    vm.stackCount = 0;
     vm.frameCount = 0;
     vm.openUpvalues = NULL;
 }
 
 void initVM()
 {
-    // Both lines run once only.
     vm.stack = NULL;
     vm.stackCapacity = 0;
     resetStack();
@@ -38,6 +37,12 @@ void initVM()
     initTable(&vm.globalNames);
     initValueArray(&vm.globalValues);
 
+    // Null the field first in case
+    // GC is triggered before it is
+    // properly copied.
+    vm.initString = NULL;
+    vm.initString = copyString("init", 4);
+
     initTable(&vm.globalAccess);
     initTable(&vm.localAccess);
 }
@@ -47,6 +52,7 @@ void freeVM()
     freeTable(&vm.globalNames);
     freeValueArray(&vm.globalValues);
     freeTable(&vm.strings);
+    vm.initString = NULL;
 
     freeTable(&vm.globalAccess);
     freeTable(&vm.localAccess);
@@ -166,7 +172,21 @@ static bool callValue(Value callee, int argCount)
                 ObjClass* klass = AS_CLASS(callee);
                 vm.stack[vm.stackCount - argCount - 1] = 
                                     OBJ_VAL(newInstance(klass));
+                Value initializer;
+                if (klass->init != NULL)
+                    return call(klass->init, argCount);
+                else if (argCount != 0)
+                {
+                    runtimeError("Expected 0 arguments but got %d.", argCount);
+                    return false;
+                }
                 return true;
+            }
+            case OBJ_BOUND_METHOD:
+            {
+                ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
+                vm.stack[vm.stackCount - argCount - 1] = bound->receiver;
+                return call(bound->method, argCount);
             }
             default:
                 break; // Non-callable object type.
@@ -175,6 +195,43 @@ static bool callValue(Value callee, int argCount)
 
     runtimeError("Can only call functions and classes.");
     return false;
+}
+
+static bool invokeFromClass(ObjClass* klass, ObjString* name, int argCount)
+{
+    Value method;
+    if (!tableGet(&klass->methods, OBJ_VAL(name), &method))
+    {
+        runtimeError("Undefined property '%s'.", name->chars);
+        return false;
+    }
+    
+    return call(AS_CLOSURE(method), argCount);
+}
+
+static bool invoke(ObjString* name, int argCount)
+{
+    Value receiver = peek(argCount);
+
+    if (!IS_INSTANCE(receiver))
+    {
+        runtimeError("Only instances have methods.");
+        return false;
+    }
+
+    ObjInstance* instance = AS_INSTANCE(receiver);
+
+    Value value;
+    if (tableGet(&instance->fields, OBJ_VAL(name), &value))
+    {
+        // If the object is a field (function) on the 
+        // instance, we instead load the field on the
+        // stack *below* the arguments and call it.
+        vm.stack[vm.stackCount - argCount - 1] = value;
+        return callValue(value, argCount);
+    }
+
+    return invokeFromClass(instance->klass, name, argCount);
 }
 
 static ObjUpvalue* captureUpvalue(Value* local)
@@ -216,6 +273,34 @@ static void closeUpvalues(Value* last)
     }
 }
 
+static void defineMethod(ObjString* name)
+{
+    Value method = peek(0);
+    ObjClass* klass = AS_CLASS(peek(1));
+    if (name == vm.initString)
+        klass->init = AS_CLOSURE(method);
+    else
+        tableSet(&klass->methods, OBJ_VAL(name), method);
+    pop();
+}
+
+static bool bindMethod(ObjClass* klass, ObjString* name)
+{
+    Value method;
+    if (!tableGet(&klass->methods, OBJ_VAL(name), &method))
+        // Error reporting will occur back in run().
+        return false;
+    
+    // We don't pop() the instance directly in case
+    // GC runs before we add the instance as a field on the
+    // ObjBoundMethod object (since newBoundMethod
+    // involves allocation first).
+    ObjBoundMethod* bound = newBoundMethod(peek(0), AS_CLOSURE(method));
+    pop();
+    push(OBJ_VAL(bound));
+    return true;
+}
+
 static bool isFalsey(Value value)
 {
     return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
@@ -227,7 +312,7 @@ static void concatenate()
     ObjString* a = AS_STRING(peek(1));
 
     int length = a->length + b->length;
-    ObjString* result = makeString(length + 1);
+    ObjString* result = makeString(length);
     memcpy(result->chars, a->chars, a->length);
     memcpy(result->chars + a->length, b->chars, b->length);
 
@@ -243,7 +328,7 @@ static void concatenate()
     }
 
     result->chars[length] = '\0';
-    result->hash = hashString(result->chars, result->length);
+    result->hash = hash;
 
     pop();
     pop();
@@ -532,6 +617,17 @@ static InterpretResult run()
                 ip = frame->ip;
                 break;
             }
+            case OP_INVOKE:
+            {
+                ObjString* method = READ_STRING_VALUE();
+                int argCount = READ_BYTE();
+                frame->ip = ip;
+                if (!invoke(method, argCount))
+                    return INTERPRET_RUNTIME_ERROR;
+                frame = &vm.frames[vm.frameCount - 1];
+                ip = frame->ip;
+                break;
+            }
             case OP_CLOSURE:
             {
                 ObjFunction* function = AS_FUNCTION(READ_VALUE());
@@ -560,8 +656,12 @@ static InterpretResult run()
             }
             case OP_CLASS:
             {
-                ObjString* name = READ_STRING_VALUE();
-                push(OBJ_VAL(newClass(name)));
+                push(OBJ_VAL(newClass(READ_STRING_VALUE())));
+                break;
+            }
+            case OP_METHOD:
+            {
+                defineMethod(READ_STRING_VALUE());
                 break;
             }
             case OP_GET_PROPERTY:
@@ -576,21 +676,28 @@ static InterpretResult run()
                 ObjString* name = READ_STRING_VALUE();
 
                 Value value;
+                // Check for field.
                 if (tableGet(&instance->fields, OBJ_VAL(name), &value))
                 {
                     pop(); // Instance;
                     push(value);
                     break;
                 }
-                
-                runtimeError("Undefined property '%s'.", name->chars);
-                return INTERPRET_RUNTIME_ERROR;
+
+                // Check for method.
+                if (!bindMethod(instance->klass, name))
+                {
+                    runtimeError("Undefined property '%s'.", name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                break;
             }
             case OP_SET_PROPERTY:
             {
                 if (!IS_INSTANCE(peek(1)))
                 {
-                    runtimeError("Only instances have fields.");
+                    runtimeError("Only instances have properties.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 
@@ -617,6 +724,8 @@ static InterpretResult run()
                     runtimeError("Failed to delete field '%s'.", name->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
+
+                break;
             }
             case OP_RETURN:
             {
@@ -642,14 +751,18 @@ static InterpretResult run()
     #undef READ_BYTE
     #undef READ_SHORT
     #undef READ_TRIBYTE
+    #undef READ_OPERAND
+
     #undef READ_CONSTANT
     #undef READ_CONST_LONG
     #undef READ_VALUE
-    #undef READ_OPERAND
     #undef READ_CONST_OPER
+
     #undef READ_STRING
     #undef READ_STRING_LONG
     #undef READ_STRING_OPER
+    #undef READ_STRING_VALUE
+
     #undef BINARY_OP
 }
 

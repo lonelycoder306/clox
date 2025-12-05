@@ -59,8 +59,10 @@ typedef struct {
 } Upvalue;
 
 typedef enum {
+    TYPE_SCRIPT,
     TYPE_FUNCTION,
-    TYPE_SCRIPT
+    TYPE_METHOD,
+    TYPE_INITIALIZER
 } FunctionType;
 
 typedef struct Compiler {
@@ -73,8 +75,13 @@ typedef struct Compiler {
     int scopeDepth;
 } Compiler;
 
+typedef struct ClassCompiler {
+    struct ClassCompiler* enclosing;
+} ClassCompiler;
+
 Parser parser;
 Compiler* current = NULL;
+ClassCompiler* currentClass = NULL;
 int continueJump = -1; // End of innermost loop (before loop instruction).
 int breakJump = -1; // End of innermost loop (after loop instruction).
 int loopDepth = 0; // Depth of innermost loop.
@@ -207,7 +214,15 @@ static void emitBytes(uint8_t byte1, uint8_t byte2)
 // Done at end of chunk.
 static void emitReturn()
 {
-    emitBytes(OP_NIL, OP_RETURN);
+    if (current->type == TYPE_INITIALIZER)
+    {
+        emitByte(OP_GET_LOCAL);
+        emitBytes(OP_SHORT, 0);
+    }
+    else
+        emitByte(OP_NIL);
+    
+    emitByte(OP_RETURN);
 }
 
 static void emitConstant(Value value)
@@ -308,8 +323,16 @@ static void initCompiler(Compiler* compiler, FunctionType type)
     Local* local = &current->locals.vars[current->locals.count++];
     local->depth = 0;
     local->isCaptured = false;
-    local->name.start = ""; // Cannot be accessed by user with any identifier.
-    local->name.length = 0;
+    if (type != TYPE_FUNCTION)
+    {
+        local->name.start = "this";
+        local->name.length = 4;
+    }
+    else
+    {
+        local->name.start = ""; // Cannot be accessed by user with any identifier.
+        local->name.length = 0;
+    }
 }
 
 static ObjFunction* endCompiler()
@@ -677,6 +700,16 @@ static void variable(bool canAssign)
     namedVariable(parser.previous, canAssign);
 }
 
+static void this_(bool canAssign)
+{
+    if (currentClass == NULL)
+    {
+        error("Can't use 'this' outside of a class.");
+        return;
+    }
+    variable(false);
+}
+
 static void binary(bool canAssign)
 {
     TokenType operatorType = parser.previous.type;
@@ -733,6 +766,14 @@ static void dot(bool canAssign)
     {
         expression();
         emitByte(OP_SET_PROPERTY);
+    }
+    else if (match(TOKEN_LEFT_PAREN))
+    {
+        uint8_t argCount = argumentList();
+        emitByte(OP_INVOKE);
+        emitConstant(OBJ_VAL(copyString(name, length)));
+        emitByte(argCount);
+        return;
     }
     else
         emitByte(OP_GET_PROPERTY);
@@ -848,12 +889,26 @@ static void function(FunctionType type)
     }
 }
 
+static void method()
+{
+    consume(TOKEN_IDENTIFIER, "Expect method name.");
+    const char* name = parser.previous.start;
+    int length = parser.previous.length;
+
+    FunctionType type = TYPE_METHOD;
+    if ((parser.previous.length == 4) 
+        && (memcmp(parser.previous.start, "init", 4) == 0))
+            type = TYPE_INITIALIZER;
+
+    function(type);
+    emitByte(OP_METHOD);
+    emitConstant(OBJ_VAL(copyString(name, length)));
+}
+
 static void classDeclaration()
 {
     consume(TOKEN_IDENTIFIER, "Expect class name.");
-    // Is this function only for global variables?
-    // Or locals too?
-    // Note: class can be declared locally in Lox.
+    Token className = parser.previous;
     int nameConstant = identifierIndex(&parser.previous);
     declareVariable();
 
@@ -863,8 +918,19 @@ static void classDeclaration()
     emitConstant(OBJ_VAL(copyString(name, length)));
     defineVariable(nameConstant, ACCESS_VAR);
 
+    ClassCompiler classCompiler;
+    classCompiler.enclosing = currentClass;
+    currentClass = &classCompiler;
+
+    namedVariable(className, false); // Load the class onto the stack.
     consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+    while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF))
+        method();
+
     consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+    emitByte(OP_POP); // Pop the class off the stack.
+
+    currentClass = currentClass->enclosing;
 }
 
 static void varDeclaration(Access accessType)
@@ -1150,9 +1216,9 @@ static void delStatement()
     {
         consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
 
-        if (!check(TOKEN_DOT))
+        if (!check(TOKEN_DOT)) // This is the actual property.
             emitByte(OP_DEL_PROPERTY);
-        else
+        else // We're still descending through nested properties.
             emitByte(OP_GET_PROPERTY);
 
         const char* name = parser.previous.start;
@@ -1172,6 +1238,9 @@ static void returnStatement()
         emitReturn();
     else
     {
+        if (current->type == TYPE_INITIALIZER)
+            error("Can't return a value from an initializer.");
+        // Compile the rest to avoid cascading errors.
         expression();
         consume(TOKEN_SEMICOLON, "Expect ';' after return value.");
         emitByte(OP_RETURN);
@@ -1261,7 +1330,7 @@ ParseRule rules[] = {
     [TOKEN_PRINT]           = {NULL,        NULL,           PREC_NONE},
     [TOKEN_RETURN]          = {NULL,        NULL,           PREC_NONE},
     [TOKEN_SUPER]           = {NULL,        NULL,           PREC_NONE},
-    [TOKEN_THIS]            = {NULL,        NULL,           PREC_NONE},
+    [TOKEN_THIS]            = {this_,       NULL,           PREC_NONE},
     [TOKEN_TRUE]            = {literal,     NULL,           PREC_NONE},
     [TOKEN_VAR]             = {NULL,        NULL,           PREC_NONE},
     [TOKEN_WHILE]           = {NULL,        NULL,           PREC_NONE},
