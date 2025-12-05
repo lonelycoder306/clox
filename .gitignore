@@ -1,4 +1,6 @@
 *.ps1
 *lox
+*.exe
+*.o
 build/
 extras/
