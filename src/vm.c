@@ -172,7 +172,6 @@ static bool callValue(Value callee, int argCount)
                 ObjClass* klass = AS_CLASS(callee);
                 vm.stack[vm.stackCount - argCount - 1] = 
                                     OBJ_VAL(newInstance(klass));
-                Value initializer;
                 if (klass->init != NULL)
                     return call(klass->init, argCount);
                 else if (argCount != 0)
